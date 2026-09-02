@@ -163,7 +163,7 @@ export default function Home() {
               </button>
 
               <Link
-                href="/explore"
+                href="/projects"
                 className="forge-button rounded-2xl border border-white/10 bg-white/[0.04] px-7 py-4 font-semibold text-white backdrop-blur transition duration-300 hover:bg-white/[0.08]"
               >
                 Explore projects

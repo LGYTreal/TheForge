@@ -406,7 +406,7 @@ export default function ProjectPage() {
                 </div>
 
                 <Link
-                  href="/explore"
+                  href="/projects"
                   className="forge-button shrink-0 rounded-2xl border border-white/10 bg-white/[0.05] px-5 py-3 font-medium text-zinc-200 hover:bg-white/[0.1] hover:text-white"
                 >
                   Explore more
