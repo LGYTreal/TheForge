@@ -8,8 +8,13 @@ export interface ForgeUser {
   email: string;
   bio: string;
   avatar: string;
+  banner: string;
   skills: string[];
   createdAt: number;
+}
+
+export interface ForgeUserWithId extends ForgeUser {
+  uid: string;
 }
 
 export async function createUserProfile(
@@ -43,13 +48,23 @@ export async function getUserProfile(
   return snapshot.val() as ForgeUser;
 }
 
-export interface ForgeUser {
-  username: string;
-  displayName: string;
-  email: string;
-  bio: string;
-  avatar: string;
-  banner: string;
-  skills: string[];
-  createdAt: number;
+export async function getAllUsers(): Promise<ForgeUserWithId[]> {
+  const snapshot = await get(ref(database, "users"));
+
+  if (!snapshot.exists()) {
+    return [];
+  }
+
+  const users = snapshot.val();
+
+  return Object.entries(users)
+    .filter(
+      ([, user]) =>
+        user &&
+        typeof user === "object"
+    )
+    .map(([uid, user]) => ({
+      uid,
+      ...(user as ForgeUser),
+    }));
 }
