@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 import { auth } from "@/firebase/auth";
+
 import {
   getUserProfile,
   ForgeUser,
@@ -20,6 +21,8 @@ import {
   getFollowingCount,
 } from "@/firebase/follows";
 
+import { getProjectCount } from "@/firebase/projects";
+
 export default function ProfilePage() {
   const router = useRouter();
 
@@ -29,6 +32,7 @@ export default function ProfilePage() {
   const [profile, setProfile] =
     useState<ForgeUser | null>(null);
 
+  const [projects, setProjects] = useState(0);
   const [followers, setFollowers] = useState(0);
   const [following, setFollowing] = useState(0);
 
@@ -43,19 +47,29 @@ export default function ProfilePage() {
           setAuthUser(user);
 
           if (user) {
-            const [
-              profileData,
-              followerCount,
-              followingCount,
-            ] = await Promise.all([
-              getUserProfile(user.uid),
-              getFollowerCount(user.uid),
-              getFollowingCount(user.uid),
-            ]);
+            try {
+              const [
+                profileData,
+                projectCount,
+                followerCount,
+                followingCount,
+              ] = await Promise.all([
+                getUserProfile(user.uid),
+                getProjectCount(user.uid),
+                getFollowerCount(user.uid),
+                getFollowingCount(user.uid),
+              ]);
 
-            setProfile(profileData);
-            setFollowers(followerCount);
-            setFollowing(followingCount);
+              setProfile(profileData);
+              setProjects(projectCount);
+              setFollowers(followerCount);
+              setFollowing(followingCount);
+            } catch (error) {
+              console.error(
+                "Failed to load profile:",
+                error
+              );
+            }
           }
 
           setLoading(false);
@@ -79,7 +93,6 @@ export default function ProfilePage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#050505] px-6 text-white">
         <div className="text-center">
-
           <h1 className="text-3xl font-bold">
             You're not logged in.
           </h1>
@@ -94,7 +107,6 @@ export default function ProfilePage() {
           >
             Log in
           </Link>
-
         </div>
       </main>
     );
@@ -111,9 +123,7 @@ export default function ProfilePage() {
 
   return (
     <main className="forge-page min-h-screen bg-[#050505] px-6 pb-20 pt-28 text-white">
-
       <div className="mx-auto max-w-5xl">
-
         <button
           onClick={() => router.back()}
           className="forge-button mb-6 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
@@ -126,9 +136,7 @@ export default function ProfilePage() {
         </button>
 
         <div className="forge-card overflow-hidden rounded-3xl border border-white/10 bg-white/[0.025]">
-
           <div className="relative h-48 overflow-hidden bg-gradient-to-br from-violet-600/30 via-blue-600/10 to-transparent">
-
             {profile?.banner && (
               <img
                 src={profile.banner}
@@ -138,17 +146,12 @@ export default function ProfilePage() {
             )}
 
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-
           </div>
 
           <div className="px-8 pb-8">
-
             <div className="forge-stagger-1 -mt-16 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-
               <div className="flex flex-col gap-6 sm:flex-row sm:items-end">
-
                 <div className="relative z-10 flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-3xl border-4 border-[#050505] bg-zinc-800 text-4xl font-bold">
-
                   {profile?.avatar ? (
                     <img
                       src={profile.avatar}
@@ -160,11 +163,9 @@ export default function ProfilePage() {
                       .charAt(0)
                       .toUpperCase()
                   )}
-
                 </div>
 
                 <div className="pb-2">
-
                   <h1 className="text-3xl font-bold">
                     {displayName}
                   </h1>
@@ -172,9 +173,7 @@ export default function ProfilePage() {
                   <p className="mt-1 text-zinc-500">
                     @{username}
                   </p>
-
                 </div>
-
               </div>
 
               <Link
@@ -183,20 +182,16 @@ export default function ProfilePage() {
               >
                 Edit profile
               </Link>
-
             </div>
 
             <div className="forge-stagger-2 mt-8 max-w-2xl">
-
               <p className="text-zinc-400">
                 {profile?.bio ||
                   "This creator hasn't written a bio yet."}
               </p>
-
             </div>
 
             <div className="forge-stagger-3 mt-8 flex flex-wrap gap-2">
-
               {(profile?.skills || []).map(
                 (skill) => (
                   <span
@@ -207,14 +202,12 @@ export default function ProfilePage() {
                   </span>
                 )
               )}
-
             </div>
 
             <div className="forge-stagger-4 mt-10 grid grid-cols-3 gap-3 border-t border-white/10 pt-8">
-
-              <div className="forge-interactive">
+              <div className="forge-interactive text-center">
                 <p className="text-2xl font-bold">
-                  0
+                  {projects}
                 </p>
 
                 <p className="text-sm text-zinc-500">
@@ -222,7 +215,7 @@ export default function ProfilePage() {
                 </p>
               </div>
 
-              <div className="forge-interactive">
+              <div className="forge-interactive text-center">
                 <p className="text-2xl font-bold">
                   {followers}
                 </p>
@@ -232,7 +225,7 @@ export default function ProfilePage() {
                 </p>
               </div>
 
-              <div className="forge-interactive">
+              <div className="forge-interactive text-center">
                 <p className="text-2xl font-bold">
                   {following}
                 </p>
@@ -241,9 +234,7 @@ export default function ProfilePage() {
                   Following
                 </p>
               </div>
-
             </div>
-
           </div>
         </div>
       </div>
