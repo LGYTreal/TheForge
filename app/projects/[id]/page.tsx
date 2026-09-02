@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { getDatabase, onValue, ref } from "firebase/database";
+import { getDatabase, onValue, ref, remove } from "firebase/database";
+import { onAuthStateChanged } from "firebase/auth";
+
 import app from "@/firebase/config";
+import { auth } from "@/firebase/auth";
 
 type Project = {
   id: string;
@@ -43,6 +46,18 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUserId(user?.uid ?? null);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!projectId) {
@@ -68,7 +83,6 @@ export default function ProjectPage() {
           id: projectId,
           ...data,
         });
-
         setNotFound(false);
         setLoading(false);
       },
@@ -111,12 +125,29 @@ export default function ProjectPage() {
     return `https://${trimmed}`;
   }
 
+  async function handleDelete() {
+    if (!project || !currentUserId || currentUserId !== project.ownerId) {
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError(false);
+
+    try {
+      const database = getDatabase(app);
+      await remove(ref(database, `projects/${projectId}`));
+      router.replace("/projects");
+    } catch {
+      setDeleting(false);
+      setDeleteError(true);
+    }
+  }
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#050505] px-6 text-white">
         <div className="forge-scale text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-white" />
-
           <p className="mt-4 text-sm text-zinc-500">
             Loading project...
           </p>
@@ -170,11 +201,13 @@ export default function ProjectPage() {
     project.contactInfo?.twitter ||
     project.contactInfo?.other;
 
+  const isOwner =
+    currentUserId !== null && currentUserId === project.ownerId;
+
   return (
     <main className="min-h-screen bg-[#050505] px-6 pb-20 pt-28 text-white">
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute left-1/2 top-[-350px] h-[700px] w-[700px] -translate-x-1/2 rounded-full bg-violet-600/15 blur-[160px]" />
-
         <div className="absolute bottom-[-300px] right-[-150px] h-[600px] w-[600px] rounded-full bg-blue-600/10 blur-[150px]" />
       </div>
 
@@ -227,9 +260,24 @@ export default function ProjectPage() {
               FORGE PROJECT
             </p>
 
-            <h1 className="mt-3 text-4xl font-black tracking-tight sm:text-6xl">
-              {project.name}
-            </h1>
+            <div className="mt-3 flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
+              <h1 className="text-4xl font-black tracking-tight sm:text-6xl">
+                {project.name}
+              </h1>
+
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteError(false);
+                    setShowDeleteModal(true);
+                  }}
+                  className="forge-button shrink-0 rounded-xl border border-red-500/20 bg-red-500/[0.08] px-4 py-2.5 text-sm font-medium text-red-300 transition hover:bg-red-500/[0.15] hover:text-red-200"
+                >
+                  Delete project
+                </button>
+              )}
+            </div>
 
             <p className="mt-6 max-w-3xl whitespace-pre-wrap text-base leading-8 text-zinc-400 sm:text-lg">
               {project.description}
@@ -416,6 +464,61 @@ export default function ProjectPage() {
           </div>
         </div>
       </div>
+
+      {showDeleteModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-6 backdrop-blur-md"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !deleting) {
+              setShowDeleteModal(false);
+            }
+          }}
+        >
+          <div className="forge-scale w-full max-w-md rounded-3xl border border-white/10 bg-[#0b0b0b]/95 p-6 shadow-2xl shadow-black/50">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10 text-xl font-bold text-red-400">
+              !
+            </div>
+
+            <h2 className="mt-5 text-2xl font-bold text-white">
+              Delete project?
+            </h2>
+
+            <p className="mt-3 leading-7 text-zinc-500">
+              Are you sure you want to delete{" "}
+              <span className="font-medium text-zinc-300">
+                {project.name}
+              </span>
+              ? This action cannot be undone.
+            </p>
+
+            {deleteError && (
+              <div className="mt-5 rounded-2xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-sm text-red-300">
+                Failed to delete the project. Please try again.
+              </div>
+            )}
+
+            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="forge-button rounded-xl border border-white/10 bg-white/[0.04] px-5 py-3 text-sm font-medium text-zinc-300 hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="forge-button rounded-xl bg-red-500/10 px-5 py-3 text-sm font-semibold text-red-300 ring-1 ring-red-500/20 hover:bg-red-500/20 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete project"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
