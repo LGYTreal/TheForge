@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/firebase/auth";
 import { getAllUsers, ForgeUserWithId } from "@/firebase/users";
@@ -107,6 +108,8 @@ function UserSkeleton() {
 }
 
 export default function UsersPage() {
+  const router = useRouter();
+
   const [users, setUsers] = useState<ForgeUserWithId[]>([]);
   const [randomUsers, setRandomUsers] = useState<ForgeUserWithId[]>([]);
   const [search, setSearch] = useState("");
@@ -193,13 +196,14 @@ export default function UsersPage() {
     <main className="min-h-screen bg-[#050505] px-5 pb-24 pt-32 text-white">
       <div className="mx-auto max-w-7xl">
         <section className="forge-page">
-          <Link
-            href="/"
-            className="forge-link mb-8 inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-white"
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="forge-button forge-stagger-1 mb-8 flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
           >
             <span className="text-lg leading-none">←</span>
-            Back to Home
-          </Link>
+            Back
+          </button>
 
           <div className="max-w-3xl">
             <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">

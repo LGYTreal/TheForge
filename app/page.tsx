@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
+import { getDatabase, onValue, ref } from "firebase/database";
+
 import Navbar from "@/components/Navbar";
 import { auth } from "@/firebase/auth";
+import app from "@/firebase/config";
 
 const projects = [
   {
@@ -33,9 +36,12 @@ const projects = [
 
 export default function Home() {
   const router = useRouter();
-
   const [loggedIn, setLoggedIn] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+
+  const [creatorCount, setCreatorCount] = useState<number | null>(null);
+  const [projectCount, setProjectCount] = useState<number | null>(null);
+  const [categoryCount, setCategoryCount] = useState<number | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -44,6 +50,70 @@ export default function Home() {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const database = getDatabase(app);
+
+    const usersRef = ref(database, "users");
+    const projectsRef = ref(database, "projects");
+
+    const unsubscribeUsers = onValue(
+      usersRef,
+      (snapshot) => {
+        const data = snapshot.val();
+
+        if (!data || typeof data !== "object") {
+          setCreatorCount(0);
+          return;
+        }
+
+        setCreatorCount(Object.keys(data).length);
+      },
+      () => {
+        setCreatorCount(0);
+      }
+    );
+
+    const unsubscribeProjects = onValue(
+      projectsRef,
+      (snapshot) => {
+        const data = snapshot.val();
+
+        if (!data || typeof data !== "object") {
+          setProjectCount(0);
+          setCategoryCount(0);
+          return;
+        }
+
+        const projectEntries = Object.values(data).filter(
+          (project) => project && typeof project === "object"
+        );
+
+        setProjectCount(projectEntries.length);
+
+        const categories = new Set<string>();
+
+        projectEntries.forEach((project) => {
+          const category = (project as { category?: unknown }).category;
+
+          if (typeof category === "string" && category.trim()) {
+            categories.add(category.trim().toLowerCase());
+          }
+        });
+
+        setCategoryCount(categories.size);
+      },
+      () => {
+        setProjectCount(0);
+        setCategoryCount(0);
+      }
+    );
+
+    return () => {
+      unsubscribeUsers();
+      unsubscribeProjects();
+    };
   }, []);
 
   function handleStartBuilding() {
@@ -62,7 +132,6 @@ export default function Home() {
 
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute left-1/2 top-[-300px] h-[700px] w-[700px] -translate-x-1/2 rounded-full bg-violet-600/20 blur-[140px]" />
-
         <div className="absolute bottom-[-300px] right-[-100px] h-[600px] w-[600px] rounded-full bg-blue-600/10 blur-[140px]" />
 
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#050505_75%)]" />
@@ -80,6 +149,11 @@ export default function Home() {
       <section className="mx-auto flex min-h-screen max-w-7xl items-center px-6 pb-20 pt-32">
         <div className="w-full">
           <div className="mx-auto max-w-4xl text-center">
+            <div className="forge-stagger-1 mb-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-zinc-400 backdrop-blur">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+              A new way to build together
+            </div>
+
             <h1 className="forge-stagger-2 text-6xl font-black tracking-[-0.05em] sm:text-7xl md:text-8xl">
               Build something
               <br />
@@ -100,7 +174,6 @@ export default function Home() {
                 className="forge-button group rounded-2xl bg-white px-7 py-4 font-semibold text-black transition duration-300 hover:bg-zinc-200 disabled:cursor-wait disabled:opacity-70"
               >
                 {checkingAuth ? "Loading..." : "Start building"}
-
                 {!checkingAuth && (
                   <span className="ml-2 inline-block transition-transform duration-300 group-hover:translate-x-1">
                     →
@@ -119,21 +192,27 @@ export default function Home() {
 
           <div className="forge-stagger-5 mx-auto mt-24 grid max-w-3xl grid-cols-3 divide-x divide-white/10 rounded-2xl border border-white/10 bg-white/[0.025] py-6 backdrop-blur-xl">
             <div className="forge-interactive text-center">
-              <p className="text-2xl font-bold">1.2K+</p>
+              <p className="text-2xl font-bold">
+                {creatorCount === null ? "..." : creatorCount}
+              </p>
               <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
                 Creators
               </p>
             </div>
 
             <div className="forge-interactive text-center">
-              <p className="text-2xl font-bold">380+</p>
+              <p className="text-2xl font-bold">
+                {projectCount === null ? "..." : projectCount}
+              </p>
               <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
                 Projects
               </p>
             </div>
 
             <div className="forge-interactive text-center">
-              <p className="text-2xl font-bold">42</p>
+              <p className="text-2xl font-bold">
+                {categoryCount === null ? "..." : categoryCount}
+              </p>
               <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
                 Categories
               </p>
@@ -173,6 +252,10 @@ export default function Home() {
             >
               <div className="relative h-48 overflow-hidden bg-gradient-to-br from-zinc-800 via-zinc-900 to-black">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(139,92,246,.35),transparent_40%)] transition duration-500 group-hover:scale-125" />
+
+                <div className="absolute bottom-4 left-4 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-zinc-300 backdrop-blur">
+                  {project.category}
+                </div>
               </div>
 
               <div className="p-6">
