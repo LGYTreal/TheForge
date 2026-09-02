@@ -299,10 +299,6 @@ export default function UsersPage() {
       <div className="mx-auto max-w-7xl">
         <section className="forge-page">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-              Forge community
-            </div>
 
             <h1 className="mt-5 text-4xl font-bold tracking-tight sm:text-5xl">
               Find your next{" "}

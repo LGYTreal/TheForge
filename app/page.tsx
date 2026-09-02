@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
-
 import Navbar from "@/components/Navbar";
 import { auth } from "@/firebase/auth";
 
@@ -34,6 +33,7 @@ const projects = [
 
 export default function Home() {
   const router = useRouter();
+
   const [loggedIn, setLoggedIn] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
@@ -80,16 +80,9 @@ export default function Home() {
       <section className="mx-auto flex min-h-screen max-w-7xl items-center px-6 pb-20 pt-32">
         <div className="w-full">
           <div className="mx-auto max-w-4xl text-center">
-
-            <div className="forge-stagger-1 mb-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-zinc-400 backdrop-blur">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              A new way to build together
-            </div>
-
             <h1 className="forge-stagger-2 text-6xl font-black tracking-[-0.05em] sm:text-7xl md:text-8xl">
               Build something
               <br />
-
               <span className="bg-gradient-to-r from-white via-zinc-300 to-zinc-600 bg-clip-text text-transparent">
                 together.
               </span>
@@ -180,10 +173,6 @@ export default function Home() {
             >
               <div className="relative h-48 overflow-hidden bg-gradient-to-br from-zinc-800 via-zinc-900 to-black">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(139,92,246,.35),transparent_40%)] transition duration-500 group-hover:scale-125" />
-
-                <div className="absolute bottom-4 left-4 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-zinc-300 backdrop-blur">
-                  {project.category}
-                </div>
               </div>
 
               <div className="p-6">
