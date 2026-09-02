@@ -129,10 +129,6 @@ export default function Home() {
       <section className="mx-auto flex min-h-screen max-w-7xl items-center px-6 pb-20 pt-32">
         <div className="w-full">
           <div className="mx-auto max-w-4xl text-center">
-            <div className="forge-stagger-1 mb-7 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm text-zinc-400 backdrop-blur">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-              A new way to build together
-            </div>
 
             <h1 className="forge-stagger-2 text-6xl font-black tracking-[-0.05em] sm:text-7xl md:text-8xl">
               Build something

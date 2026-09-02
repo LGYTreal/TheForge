@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { onAuthStateChanged, User } from "firebase/auth";
-
 import { auth, signOut } from "@/firebase/auth";
 
 export default function Navbar() {
@@ -11,7 +10,6 @@ export default function Navbar() {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, setUser);
-
     return () => unsubscribe();
   }, []);
 
@@ -83,6 +81,13 @@ export default function Navbar() {
                 className="hidden rounded-xl px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 hover:text-white sm:block"
               >
                 Profile
+              </Link>
+
+              <Link
+                href="/settings"
+                className="rounded-xl px-4 py-2 text-sm text-zinc-300 transition hover:bg-white/5 hover:text-white"
+              >
+                Settings
               </Link>
 
               <button
