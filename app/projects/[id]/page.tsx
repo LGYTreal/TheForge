@@ -260,22 +260,31 @@ export default function ProjectPage() {
               FORGE PROJECT
             </p>
 
-            <div className="mt-3 flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
+            <div className="mt-3 flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
               <h1 className="text-4xl font-black tracking-tight sm:text-6xl">
                 {project.name}
               </h1>
 
               {isOwner && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeleteError(false);
-                    setShowDeleteModal(true);
-                  }}
-                  className="forge-button shrink-0 rounded-xl border border-red-500/20 bg-red-500/[0.08] px-4 py-2.5 text-sm font-medium text-red-300 transition hover:bg-red-500/[0.15] hover:text-red-200"
-                >
-                  Delete project
-                </button>
+                <div className="flex shrink-0 gap-3">
+                  <Link
+                    href={`/projects/${projectId}/edit`}
+                    className="forge-button rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.1] hover:text-white"
+                  >
+                    Edit project
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteError(false);
+                      setShowDeleteModal(true);
+                    }}
+                    className="forge-button rounded-xl border border-red-500/20 bg-red-500/[0.08] px-4 py-2.5 text-sm font-medium text-red-300 transition hover:bg-red-500/[0.15] hover:text-red-200"
+                  >
+                    Delete project
+                  </button>
+                </div>
               )}
             </div>
 
@@ -346,7 +355,6 @@ export default function ProjectPage() {
                       <span className="truncate">
                         Website
                       </span>
-
                       <span>↗</span>
                     </a>
                   )}
@@ -361,7 +369,6 @@ export default function ProjectPage() {
                       <span className="truncate">
                         GitHub
                       </span>
-
                       <span>↗</span>
                     </a>
                   )}
