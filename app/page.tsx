@@ -4,15 +4,23 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
+import { onValue, ref } from "firebase/database";
 
 import Navbar from "@/components/Navbar";
-
 import { auth } from "@/firebase/auth";
+import { database } from "@/firebase/database";
 
 export default function Home() {
   const router = useRouter();
+
   const [loggedIn, setLoggedIn] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+
+  const [creatorCount, setCreatorCount] = useState(0);
+  const [projectCount, setProjectCount] = useState(0);
+  const [categoryCount, setCategoryCount] = useState(0);
+
+  const [statsLoaded, setStatsLoaded] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -21,6 +29,70 @@ export default function Home() {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const usersRef = ref(database, "users");
+    const projectsRef = ref(database, "projects");
+
+    const unsubscribeUsers = onValue(
+      usersRef,
+      (snapshot) => {
+        const data = snapshot.val();
+
+        if (!data || typeof data !== "object") {
+          setCreatorCount(0);
+        } else {
+          setCreatorCount(Object.keys(data).length);
+        }
+
+        setStatsLoaded(true);
+      },
+      () => {
+        setCreatorCount(0);
+        setStatsLoaded(true);
+      }
+    );
+
+    const unsubscribeProjects = onValue(
+      projectsRef,
+      (snapshot) => {
+        const data = snapshot.val();
+
+        if (!data || typeof data !== "object") {
+          setProjectCount(0);
+          setCategoryCount(0);
+          return;
+        }
+
+        const entries = Object.values(data).filter(
+          (project) => project && typeof project === "object"
+        );
+
+        setProjectCount(entries.length);
+
+        const categories = new Set<string>();
+
+        entries.forEach((project) => {
+          const category = (project as { category?: unknown }).category;
+
+          if (typeof category === "string" && category.trim()) {
+            categories.add(category.trim().toLowerCase());
+          }
+        });
+
+        setCategoryCount(categories.size);
+      },
+      () => {
+        setProjectCount(0);
+        setCategoryCount(0);
+      }
+    );
+
+    return () => {
+      unsubscribeUsers();
+      unsubscribeProjects();
+    };
   }, []);
 
   function handleStartBuilding() {
@@ -39,6 +111,7 @@ export default function Home() {
 
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute left-1/2 top-[-300px] h-[700px] w-[700px] -translate-x-1/2 rounded-full bg-violet-600/20 blur-[140px]" />
+
         <div className="absolute bottom-[-300px] right-[-100px] h-[600px] w-[600px] rounded-full bg-blue-600/10 blur-[140px]" />
 
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#050505_75%)]" />
@@ -81,6 +154,7 @@ export default function Home() {
                 className="forge-button group rounded-2xl bg-white px-7 py-4 font-semibold text-black transition duration-300 hover:bg-zinc-200 disabled:cursor-wait disabled:opacity-70"
               >
                 {checkingAuth ? "Loading..." : "Start building"}
+
                 {!checkingAuth && (
                   <span className="ml-2 inline-block transition-transform duration-300 group-hover:translate-x-1">
                     →
@@ -99,21 +173,30 @@ export default function Home() {
 
           <div className="forge-stagger-5 mx-auto mt-24 grid max-w-3xl grid-cols-3 divide-x divide-white/10 rounded-2xl border border-white/10 bg-white/[0.025] py-6 backdrop-blur-xl">
             <div className="forge-interactive text-center">
-              <p className="text-2xl font-bold">1.2K+</p>
+              <p className="text-2xl font-bold">
+                {statsLoaded ? creatorCount : "..."}
+              </p>
+
               <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
                 Creators
               </p>
             </div>
 
             <div className="forge-interactive text-center">
-              <p className="text-2xl font-bold">380+</p>
+              <p className="text-2xl font-bold">
+                {statsLoaded ? projectCount : "..."}
+              </p>
+
               <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
                 Projects
               </p>
             </div>
 
             <div className="forge-interactive text-center">
-              <p className="text-2xl font-bold">42</p>
+              <p className="text-2xl font-bold">
+                {statsLoaded ? categoryCount : "..."}
+              </p>
+
               <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
                 Categories
               </p>
