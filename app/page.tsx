@@ -4,44 +4,15 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
-import { getDatabase, onValue, ref } from "firebase/database";
 
 import Navbar from "@/components/Navbar";
-import { auth } from "@/firebase/auth";
-import app from "@/firebase/config";
 
-const projects = [
-  {
-    name: "Neon Runner",
-    description: "A futuristic arcade racing experience.",
-    category: "Game",
-    members: 12,
-    progress: 74,
-  },
-  {
-    name: "PixelOS",
-    description: "A lightweight operating system experiment.",
-    category: "Software",
-    members: 7,
-    progress: 48,
-  },
-  {
-    name: "Project Aurora",
-    description: "An open-source creative toolkit.",
-    category: "Creative",
-    members: 19,
-    progress: 91,
-  },
-];
+import { auth } from "@/firebase/auth";
 
 export default function Home() {
   const router = useRouter();
   const [loggedIn, setLoggedIn] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
-
-  const [creatorCount, setCreatorCount] = useState<number | null>(null);
-  const [projectCount, setProjectCount] = useState<number | null>(null);
-  const [categoryCount, setCategoryCount] = useState<number | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -50,70 +21,6 @@ export default function Home() {
     });
 
     return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const database = getDatabase(app);
-
-    const usersRef = ref(database, "users");
-    const projectsRef = ref(database, "projects");
-
-    const unsubscribeUsers = onValue(
-      usersRef,
-      (snapshot) => {
-        const data = snapshot.val();
-
-        if (!data || typeof data !== "object") {
-          setCreatorCount(0);
-          return;
-        }
-
-        setCreatorCount(Object.keys(data).length);
-      },
-      () => {
-        setCreatorCount(0);
-      }
-    );
-
-    const unsubscribeProjects = onValue(
-      projectsRef,
-      (snapshot) => {
-        const data = snapshot.val();
-
-        if (!data || typeof data !== "object") {
-          setProjectCount(0);
-          setCategoryCount(0);
-          return;
-        }
-
-        const projectEntries = Object.values(data).filter(
-          (project) => project && typeof project === "object"
-        );
-
-        setProjectCount(projectEntries.length);
-
-        const categories = new Set<string>();
-
-        projectEntries.forEach((project) => {
-          const category = (project as { category?: unknown }).category;
-
-          if (typeof category === "string" && category.trim()) {
-            categories.add(category.trim().toLowerCase());
-          }
-        });
-
-        setCategoryCount(categories.size);
-      },
-      () => {
-        setProjectCount(0);
-        setCategoryCount(0);
-      }
-    );
-
-    return () => {
-      unsubscribeUsers();
-      unsubscribeProjects();
-    };
   }, []);
 
   function handleStartBuilding() {
@@ -192,93 +99,26 @@ export default function Home() {
 
           <div className="forge-stagger-5 mx-auto mt-24 grid max-w-3xl grid-cols-3 divide-x divide-white/10 rounded-2xl border border-white/10 bg-white/[0.025] py-6 backdrop-blur-xl">
             <div className="forge-interactive text-center">
-              <p className="text-2xl font-bold">
-                {creatorCount === null ? "..." : creatorCount}
-              </p>
+              <p className="text-2xl font-bold">1.2K+</p>
               <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
                 Creators
               </p>
             </div>
 
             <div className="forge-interactive text-center">
-              <p className="text-2xl font-bold">
-                {projectCount === null ? "..." : projectCount}
-              </p>
+              <p className="text-2xl font-bold">380+</p>
               <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
                 Projects
               </p>
             </div>
 
             <div className="forge-interactive text-center">
-              <p className="text-2xl font-bold">
-                {categoryCount === null ? "..." : categoryCount}
-              </p>
+              <p className="text-2xl font-bold">42</p>
               <p className="mt-1 text-xs text-zinc-500 sm:text-sm">
                 Categories
               </p>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-6 pb-32">
-        <div className="mb-10 flex items-end justify-between">
-          <div>
-            <p className="mb-2 text-sm font-medium text-violet-400">
-              DISCOVER
-            </p>
-
-            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Projects worth seeing.
-            </h2>
-          </div>
-
-          <Link
-            href="/explore"
-            className="forge-link hidden text-sm text-zinc-400 hover:text-white sm:block"
-          >
-            View all →
-          </Link>
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-3">
-          {projects.map((project, index) => (
-            <div
-              key={project.name}
-              className={`forge-card forge-stagger-${Math.min(
-                index + 1,
-                6
-              )} group overflow-hidden rounded-3xl border border-white/10 bg-white/[0.025]`}
-            >
-              <div className="relative h-48 overflow-hidden bg-gradient-to-br from-zinc-800 via-zinc-900 to-black">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(139,92,246,.35),transparent_40%)] transition duration-500 group-hover:scale-125" />
-
-                <div className="absolute bottom-4 left-4 rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-zinc-300 backdrop-blur">
-                  {project.category}
-                </div>
-              </div>
-
-              <div className="p-6">
-                <h3 className="text-xl font-bold">{project.name}</h3>
-
-                <p className="mt-2 min-h-12 text-sm leading-6 text-zinc-500">
-                  {project.description}
-                </p>
-
-                <div className="mt-5 flex items-center justify-between text-xs text-zinc-500">
-                  <span>👥 {project.members} members</span>
-                  <span>{project.progress}% complete</span>
-                </div>
-
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/5">
-                  <div
-                    className="h-full rounded-full bg-white transition-all duration-700 group-hover:bg-violet-400"
-                    style={{ width: `${project.progress}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
         </div>
       </section>
 
