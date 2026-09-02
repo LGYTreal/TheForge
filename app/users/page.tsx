@@ -1,17 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
 import Link from "next/link";
-
 import { onAuthStateChanged } from "firebase/auth";
-
 import { auth } from "@/firebase/auth";
-import {
-  followUser,
-  isFollowing,
-  unfollowUser,
-} from "@/firebase/follows";
 import { getAllUsers, ForgeUserWithId } from "@/firebase/users";
 
 function shuffleUsers(users: ForgeUserWithId[]) {
@@ -28,158 +20,69 @@ function shuffleUsers(users: ForgeUserWithId[]) {
 function UserCard({
   user,
   index,
-  currentUid,
 }: {
   user: ForgeUserWithId;
   index: number;
-  currentUid: string;
 }) {
-  const isSelf = user.uid === currentUid;
-  const [following, setFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
-
-  useEffect(() => {
-    if (isSelf) {
-      return;
-    }
-
-    let active = true;
-
-    async function checkFollowing() {
-      try {
-        const result = await isFollowing(currentUid, user.uid);
-
-        if (active) {
-          setFollowing(result);
-        }
-      } catch {
-        if (active) {
-          setFollowing(false);
-        }
-      }
-    }
-
-    checkFollowing();
-
-    return () => {
-      active = false;
-    };
-  }, [currentUid, user.uid, isSelf]);
-
-  async function handleFollow(event: React.MouseEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (isSelf || followLoading) {
-      return;
-    }
-
-    setFollowLoading(true);
-
-    try {
-      if (following) {
-        await unfollowUser(currentUid, user.uid);
-        setFollowing(false);
-      } else {
-        await followUser(currentUid, user.uid);
-        setFollowing(true);
-      }
-    } finally {
-      setFollowLoading(false);
-    }
-  }
-
   return (
-    <div
+    <Link
+      href={`/profile?uid=${user.uid}`}
       className={`forge-card forge-glass forge-hover-glow group rounded-3xl p-6 ${
         index < 6 ? `forge-stagger-${index + 1}` : "forge-slide-up"
       }`}
     >
-      <Link
-        href={`/profile?uid=${user.uid}`}
-        className="block"
-      >
-        <div className="flex items-start gap-4">
-          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-            {user.avatar ? (
-              <img
-                src={user.avatar}
-                alt={user.displayName || user.username}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-xl font-bold text-zinc-400">
-                {(user.displayName || user.username || "?")
-                  .charAt(0)
-                  .toUpperCase()}
-              </div>
-            )}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-semibold text-white transition-colors group-hover:text-violet-300">
-              {user.displayName || user.username}
-            </h2>
-
-            <p className="mt-0.5 truncate text-sm text-zinc-500">
-              @{user.username}
-            </p>
-          </div>
-
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-500 transition-all duration-300 group-hover:border-violet-400/20 group-hover:bg-violet-400/10 group-hover:text-violet-300">
-            →
-          </div>
+      <div className="flex items-start gap-4">
+        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+          {user.avatar ? (
+            <img
+              src={user.avatar}
+              alt={user.displayName || user.username}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-xl font-bold text-zinc-400">
+              {(user.displayName || user.username || "?")
+                .charAt(0)
+                .toUpperCase()}
+            </div>
+          )}
         </div>
 
-        <p className="mt-5 line-clamp-2 min-h-10 text-sm leading-5 text-zinc-400">
-          {user.bio || "No bio yet."}
-        </p>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-lg font-semibold text-white transition-colors group-hover:text-violet-300">
+            {user.displayName || user.username}
+          </h2>
 
-        {user.skills?.length > 0 && (
-          <div className="mt-5 flex flex-wrap gap-2">
-            {user.skills.slice(0, 3).map((skill) => (
-              <span
-                key={skill}
-                className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-zinc-400"
-              >
-                {skill}
-              </span>
-            ))}
+          <p className="mt-0.5 truncate text-sm text-zinc-500">
+            @{user.username}
+          </p>
+        </div>
 
-            {user.skills.length > 3 && (
-              <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-zinc-500">
-                +{user.skills.length - 3}
-              </span>
-            )}
-          </div>
-        )}
-      </Link>
-
-      <div className="mt-5 border-t border-white/10 pt-5">
-        {isSelf ? (
-          <div className="flex h-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-sm font-medium text-zinc-500">
-            You
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={handleFollow}
-            disabled={followLoading}
-            className={`forge-button h-10 w-full rounded-xl border text-sm font-semibold transition ${
-              following
-                ? "border-white/10 bg-white/[0.05] text-zinc-300 hover:border-red-400/20 hover:bg-red-400/5 hover:text-red-300"
-                : "border-white/10 bg-white text-black hover:bg-zinc-200"
-            } disabled:cursor-not-allowed disabled:opacity-50`}
-          >
-            {followLoading
-              ? "..."
-              : following
-                ? "Following"
-                : "Follow"}
-          </button>
-        )}
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-500 transition-all duration-300 group-hover:border-violet-400/20 group-hover:bg-violet-400/10 group-hover:text-violet-300">
+          →
+        </div>
       </div>
-    </div>
+
+      <p className="mt-5 line-clamp-2 min-h-10 text-sm leading-5 text-zinc-400">
+        {user.bio || "No bio yet."}
+      </p>
+
+      {user.skills?.length > 0 && (
+        <div className="mt-5 flex flex-wrap gap-x-4 gap-y-2">
+          {user.skills.slice(0, 3).map((skill) => (
+            <span key={skill} className="text-xs text-zinc-400">
+              {skill}
+            </span>
+          ))}
+
+          {user.skills.length > 3 && (
+            <span className="text-xs text-zinc-500">
+              +{user.skills.length - 3}
+            </span>
+          )}
+        </div>
+      )}
+    </Link>
   );
 }
 
@@ -199,8 +102,6 @@ function UserSkeleton() {
         <div className="forge-shimmer h-4 w-full rounded-lg" />
         <div className="forge-shimmer h-4 w-3/4 rounded-lg" />
       </div>
-
-      <div className="forge-shimmer mt-5 h-10 w-full rounded-xl" />
     </div>
   );
 }
@@ -211,7 +112,6 @@ export default function UsersPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
-  const [currentUid, setCurrentUid] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -223,13 +123,11 @@ export default function UsersPage() {
       }
 
       setAuthenticated(true);
-      setCurrentUid(user.uid);
       setLoading(true);
       setError("");
 
       try {
         const allUsers = await getAllUsers();
-
         setUsers(allUsers);
         setRandomUsers(shuffleUsers(allUsers).slice(0, 8));
       } catch {
@@ -253,10 +151,7 @@ export default function UsersPage() {
       const username = user.username?.toLowerCase() || "";
       const displayName = user.displayName?.toLowerCase() || "";
 
-      return (
-        username.includes(query) ||
-        displayName.includes(query)
-      );
+      return username.includes(query) || displayName.includes(query);
     });
   }, [search, users, randomUsers]);
 
@@ -298,10 +193,17 @@ export default function UsersPage() {
     <main className="min-h-screen bg-[#050505] px-5 pb-24 pt-32 text-white">
       <div className="mx-auto max-w-7xl">
         <section className="forge-page">
-          <div className="max-w-3xl">
+          <Link
+            href="/"
+            className="forge-link mb-8 inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-white"
+          >
+            <span className="text-lg leading-none">←</span>
+            Back to Home
+          </Link>
 
-            <h1 className="mt-5 text-4xl font-bold tracking-tight sm:text-5xl">
-              Find your next{" "}
+          <div className="max-w-3xl">
+            <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+              Find your{" "}
               <span className="forge-gradient-text">
                 collaborator.
               </span>
@@ -360,9 +262,7 @@ export default function UsersPage() {
               <p className="mt-1 text-sm text-zinc-500">
                 {search.trim()
                   ? `${filteredUsers.length} ${
-                      filteredUsers.length === 1
-                        ? "person"
-                        : "people"
+                      filteredUsers.length === 1 ? "person" : "people"
                     } found`
                   : "Random members from the Forge community"}
               </p>
@@ -414,8 +314,8 @@ export default function UsersPage() {
               </h3>
 
               <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500">
-                We couldn't find anyone matching "{search}".
-                Try searching for another name or username.
+                We couldn't find anyone matching "{search}". Try
+                searching for another name or username.
               </p>
 
               <button
@@ -433,7 +333,6 @@ export default function UsersPage() {
                   key={user.uid}
                   user={user}
                   index={index}
-                  currentUid={currentUid}
                 />
               ))}
             </div>

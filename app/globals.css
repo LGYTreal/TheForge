@@ -37,7 +37,7 @@ body {
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  transition: background 0.2s ease;
+  transition: background 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -47,12 +47,19 @@ body {
 @keyframes forge-page-in {
   0% {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(14px) scale(0.992);
+    filter: blur(4px);
+  }
+
+  60% {
+    opacity: 0.9;
+    filter: blur(0);
   }
 
   100% {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+    filter: blur(0);
   }
 }
 
@@ -69,7 +76,14 @@ body {
 @keyframes forge-scale-in {
   0% {
     opacity: 0;
-    transform: scale(0.97);
+    transform: scale(0.94);
+    filter: blur(3px);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1.01);
+    filter: blur(0);
   }
 
   100% {
@@ -81,7 +95,13 @@ body {
 @keyframes forge-slide-up {
   0% {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(28px);
+    filter: blur(4px);
+  }
+
+  65% {
+    opacity: 1;
+    filter: blur(0);
   }
 
   100% {
@@ -90,14 +110,31 @@ body {
   }
 }
 
+@keyframes forge-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(35px) scale(0.98);
+    clip-path: inset(10% 0 0 0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    clip-path: inset(0 0 0 0);
+  }
+}
+
 @keyframes forge-pop {
   0% {
     opacity: 0;
-    transform: scale(0.94);
+    transform: scale(0.9);
+    filter: blur(4px);
   }
 
-  70% {
-    transform: scale(1.015);
+  65% {
+    opacity: 1;
+    transform: scale(1.02);
+    filter: blur(0);
   }
 
   100% {
@@ -109,11 +146,15 @@ body {
 @keyframes forge-glow {
   0%,
   100% {
-    box-shadow: 0 0 0 rgba(139, 92, 246, 0);
+    box-shadow:
+      0 0 0 rgba(139, 92, 246, 0),
+      0 0 0 rgba(59, 130, 246, 0);
   }
 
   50% {
-    box-shadow: 0 0 45px rgba(139, 92, 246, 0.12);
+    box-shadow:
+      0 0 45px rgba(139, 92, 246, 0.1),
+      0 0 90px rgba(59, 130, 246, 0.04);
   }
 }
 
@@ -124,63 +165,94 @@ body {
   }
 
   50% {
-    transform: translateY(-5px);
+    transform: translateY(-7px);
   }
 }
 
 @keyframes forge-pulse {
   0%,
   100% {
-    opacity: 0.55;
+    opacity: 0.45;
+    transform: scale(0.98);
   }
 
   50% {
     opacity: 1;
+    transform: scale(1);
   }
 }
 
 @keyframes forge-shimmer {
   0% {
-    background-position: -1000px 0;
+    background-position: -1200px 0;
   }
 
   100% {
-    background-position: 1000px 0;
+    background-position: 1200px 0;
+  }
+}
+
+@keyframes forge-gradient {
+  0% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(4%, 3%, 0) scale(1.08);
+  }
+
+  100% {
+    transform: translate3d(-4%, -2%, 0) scale(1);
+  }
+}
+
+@keyframes forge-border {
+  0%,
+  100% {
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  50% {
+    border-color: rgba(139, 92, 246, 0.22);
   }
 }
 
 main {
-  animation: forge-page-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: forge-page-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center top;
 }
 
 a {
   transition:
-    color 0.2s ease,
-    opacity 0.2s ease,
-    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-    background-color 0.2s ease,
-    border-color 0.2s ease;
+    color 0.25s ease,
+    opacity 0.25s ease,
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    text-shadow 0.25s ease;
 }
 
 a:hover {
-  opacity: 0.9;
+  opacity: 0.95;
 }
 
 button {
   transition:
-    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.2s ease,
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.25s ease,
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.3s ease,
+    filter 0.25s ease;
 }
 
 button:hover:not(:disabled) {
-  transform: translateY(-1px);
+  transform: translateY(-2px) scale(1.01);
 }
 
 button:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: translateY(0) scale(0.97);
+  transition-duration: 0.1s;
 }
 
 button:disabled {
@@ -191,9 +263,10 @@ input,
 textarea,
 select {
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease;
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    background-color 0.3s ease,
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 input:focus,
@@ -202,74 +275,131 @@ select:focus {
   outline: none;
 }
 
+input:focus,
+textarea:focus,
+select:focus {
+  transform: translateY(-1px);
+}
+
 img {
   transition:
-    opacity 0.25s ease,
-    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.3s ease;
+    opacity 0.35s ease,
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.4s ease;
 }
 
 .forge-page {
-  animation: forge-page-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: forge-page-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .forge-fade {
-  animation: forge-fade-in 0.4s ease-out both;
+  animation: forge-fade-in 0.65s ease-out both;
 }
 
 .forge-scale {
-  animation: forge-scale-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: forge-scale-in 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .forge-pop {
-  animation: forge-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: forge-pop 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .forge-slide-up {
-  animation: forge-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: forge-slide-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.forge-reveal {
+  animation: forge-reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .forge-card {
+  position: relative;
   transition:
-    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 0.3s ease,
-    background-color 0.3s ease,
-    box-shadow 0.3s ease;
+    transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.35s ease,
+    background-color 0.35s ease,
+    box-shadow 0.45s ease;
+}
+
+.forge-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    radial-gradient(
+      circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+      rgba(139, 92, 246, 0.08),
+      transparent 32%
+    );
+  opacity: 0;
+  transition: opacity 0.4s ease;
 }
 
 .forge-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-7px) scale(1.008);
+  border-color: rgba(255, 255, 255, 0.16);
   background-color: rgba(255, 255, 255, 0.04);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 25px 70px rgba(0, 0, 0, 0.28),
+    0 0 45px rgba(139, 92, 246, 0.05);
+}
+
+.forge-card:hover::before {
+  opacity: 1;
 }
 
 .forge-button {
+  position: relative;
+  overflow: hidden;
   transition:
-    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
-    background-color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    opacity 0.2s ease;
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.35s ease,
+    opacity 0.25s ease;
+}
+
+.forge-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    110deg,
+    transparent 25%,
+    rgba(255, 255, 255, 0.14) 50%,
+    transparent 75%
+  );
+  transform: translateX(-120%);
+  transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.forge-button:hover::after {
+  transform: translateX(120%);
 }
 
 .forge-button:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.2);
 }
 
 .forge-button:active {
-  transform: scale(0.96);
+  transform: translateY(0) scale(0.96);
+  box-shadow: none;
 }
 
 .forge-interactive {
   transition:
-    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.25s ease,
-    background-color 0.25s ease;
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.3s ease,
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 .forge-interactive:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
 }
 
 .forge-glass {
@@ -277,75 +407,116 @@ img {
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  transition:
+    background-color 0.35s ease,
+    border-color 0.35s ease,
+    box-shadow 0.4s ease;
+}
+
+.forge-glass:hover {
+  background: rgba(255, 255, 255, 0.035);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .forge-glow {
-  animation: forge-glow 4s ease-in-out infinite;
+  animation: forge-glow 5s ease-in-out infinite;
 }
 
 .forge-float {
-  animation: forge-float 4s ease-in-out infinite;
+  animation: forge-float 5s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
 .forge-pulse {
-  animation: forge-pulse 2s ease-in-out infinite;
+  animation: forge-pulse 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
 }
 
 .forge-gradient-text {
   background: linear-gradient(
-    90deg,
-    #ffffff,
-    #c4b5fd,
-    #93c5fd
+    100deg,
+    #ffffff 0%,
+    #ddd6fe 35%,
+    #a5b4fc 65%,
+    #93c5fd 100%
   );
+  background-size: 200% auto;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  animation: forge-gradient-text 5s ease-in-out infinite;
+}
+
+@keyframes forge-gradient-text {
+  0%,
+  100% {
+    background-position: 0% center;
+  }
+
+  50% {
+    background-position: 100% center;
+  }
 }
 
 .forge-image {
   overflow: hidden;
 }
 
+.forge-image img {
+  transform: scale(1);
+}
+
+.forge-image:hover img {
+  transform: scale(1.07);
+  filter: brightness(1.08);
+}
+
 .forge-image:hover {
-  transform: scale(1.04);
+  transform: scale(1.01);
 }
 
 .forge-hover-glow {
   transition:
-    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 0.3s ease,
-    box-shadow 0.3s ease;
+    transform 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.35s ease,
+    box-shadow 0.45s ease;
 }
 
 .forge-hover-glow:hover {
-  transform: translateY(-3px);
-  border-color: rgba(139, 92, 246, 0.3);
+  transform: translateY(-5px) scale(1.005);
+  border-color: rgba(139, 92, 246, 0.32);
   box-shadow:
-    0 0 30px rgba(139, 92, 246, 0.08),
-    0 20px 60px rgba(0, 0, 0, 0.2);
+    0 0 35px rgba(139, 92, 246, 0.09),
+    0 25px 70px rgba(0, 0, 0, 0.25);
 }
 
 .forge-focus:focus {
-  border-color: rgba(139, 92, 246, 0.5);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.55);
+  box-shadow:
+    0 0 0 3px rgba(139, 92, 246, 0.1),
+    0 10px 35px rgba(139, 92, 246, 0.05);
 }
 
 .forge-link {
   position: relative;
+  transition:
+    color 0.25s ease,
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .forge-link::after {
   position: absolute;
   left: 0;
-  bottom: -3px;
+  bottom: -4px;
   width: 100%;
   height: 1px;
   content: "";
   background: currentColor;
   transform: scaleX(0);
   transform-origin: right;
-  transition: transform 0.25s ease;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.forge-link:hover {
+  transform: translateX(2px);
 }
 
 .forge-link:hover::after {
@@ -354,38 +525,55 @@ img {
 }
 
 .forge-stagger-1 {
-  animation: forge-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+  animation: forge-slide-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.06s both;
 }
 
 .forge-stagger-2 {
-  animation: forge-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  animation: forge-slide-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
 }
 
 .forge-stagger-3 {
-  animation: forge-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  animation: forge-slide-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both;
 }
 
 .forge-stagger-4 {
-  animation: forge-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
+  animation: forge-slide-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.24s both;
 }
 
 .forge-stagger-5 {
-  animation: forge-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.25s both;
+  animation: forge-slide-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
 }
 
 .forge-stagger-6 {
-  animation: forge-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+  animation: forge-slide-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.36s both;
+}
+
+.forge-stagger-7 {
+  animation: forge-slide-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.42s both;
+}
+
+.forge-stagger-8 {
+  animation: forge-slide-up 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.48s both;
 }
 
 .forge-shimmer {
   background: linear-gradient(
-    90deg,
-    rgba(255, 255, 255, 0.03) 25%,
-    rgba(255, 255, 255, 0.08) 50%,
-    rgba(255, 255, 255, 0.03) 75%
+    105deg,
+    rgba(255, 255, 255, 0.025) 20%,
+    rgba(255, 255, 255, 0.075) 45%,
+    rgba(255, 255, 255, 0.025) 70%
   );
-  background-size: 1000px 100%;
-  animation: forge-shimmer 2s infinite linear;
+  background-size: 1200px 100%;
+  animation: forge-shimmer 2.2s infinite linear;
+}
+
+.forge-ambient {
+  animation: forge-gradient 12s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  will-change: transform;
+}
+
+.forge-border-pulse {
+  animation: forge-border 4s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -399,5 +587,6 @@ img {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
