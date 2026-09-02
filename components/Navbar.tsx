@@ -26,7 +26,6 @@ export default function Navbar() {
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-black font-black transition-transform duration-300 group-hover:rotate-6">
             F
           </div>
-
           <span className="text-lg font-bold tracking-tight">
             Forge
           </span>
@@ -38,6 +37,13 @@ export default function Navbar() {
             className="text-sm text-zinc-400 transition hover:text-white"
           >
             Projects
+          </Link>
+
+          <Link
+            href="/users"
+            className="text-sm text-zinc-400 transition hover:text-white"
+          >
+            Users
           </Link>
         </div>
 

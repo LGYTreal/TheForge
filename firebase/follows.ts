@@ -75,3 +75,27 @@ export async function getFollowingCount(uid: string) {
 
   return Object.keys(snapshot.val()).length;
 }
+
+export async function getFollowerIds(uid: string) {
+  const snapshot = await get(
+    ref(database, `followers/${uid}`)
+  );
+
+  if (!snapshot.exists()) {
+    return [];
+  }
+
+  return Object.keys(snapshot.val());
+}
+
+export async function getFollowingIds(uid: string) {
+  const snapshot = await get(
+    ref(database, `following/${uid}`)
+  );
+
+  if (!snapshot.exists()) {
+    return [];
+  }
+
+  return Object.keys(snapshot.val());
+}
