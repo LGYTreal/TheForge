@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import ForgePreferences from "@/components/ForgePreferences";
 
 export const metadata: Metadata = {
   title: "Forge",
@@ -13,7 +14,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ForgePreferences />
+        {children}
+      </body>
     </html>
   );
 }

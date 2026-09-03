@@ -590,3 +590,26 @@ img {
     scroll-behavior: auto !important;
   }
 }
+
+html.forge-disable-animations *,
+html.forge-disable-animations *::before,
+html.forge-disable-animations *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+html.forge-disable-animations {
+  scroll-behavior: auto !important;
+}
+
+html.forge-disable-cursor,
+html.forge-disable-cursor * {
+  cursor: auto !important;
+}
+
+html.forge-disable-cursor .cursor-glow,
+html.forge-disable-cursor .cursor-effect,
+html.forge-disable-cursor [data-cursor-effect] {
+  display: none !important;
+}
