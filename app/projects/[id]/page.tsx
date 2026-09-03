@@ -1,5 +1,6 @@
 "use client";
 
+import ProjectFeatures from "@/components/ProjectFeatures";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -446,6 +447,13 @@ export default function ProjectPage() {
                 )}
               </div>
             </div>
+
+            <ProjectFeatures
+            projectId={projectId}
+            ownerId={project.ownerId}
+            currentUserId={currentUserId}
+            isOwner={isOwner}
+            />
 
             <div className="mt-10 rounded-3xl border border-violet-400/10 bg-violet-500/[0.04] p-6 sm:p-8">
               <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-center">
