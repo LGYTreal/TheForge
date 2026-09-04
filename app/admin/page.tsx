@@ -6,7 +6,10 @@ import {
   onAuthStateChanged,
   User,
 } from "firebase/auth";
+import { ref, onValue } from "firebase/database";
+
 import { auth } from "@/firebase/auth";
+import { database } from "@/firebase/database";
 import {
   createBan,
   deleteAdminProject,
@@ -49,6 +52,7 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [bans, setBans] = useState<UserBan[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
@@ -59,8 +63,9 @@ export default function AdminPage() {
 
   const [banUser, setBanUser] = useState<AdminUser | null>(null);
   const [banDuration, setBanDuration] = useState(
-    String(24 * 60 * 60 * 1000)
-  );
+  String(24 * 60 * 60 * 1000)
+);
+
   const [banReason, setBanReason] = useState("");
   const [banning, setBanning] = useState(false);
 
@@ -68,81 +73,30 @@ export default function AdminPage() {
   const [actionSuccess, setActionSuccess] = useState("");
 
   useEffect(() => {
-    let active = true;
+    return onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
 
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (currentUser) => {
-        if (!active) {
-          return;
-        }
-
-        setUser(currentUser);
-        setAuthorized(null);
-        setLoading(true);
-
-        if (!currentUser) {
-          if (!active) {
-            return;
-          }
-
-          setAuthorized(false);
-          setLoading(false);
-          return;
-        }
-
-        const uid = currentUser.uid;
-
-        try {
-          const admin = await isAdmin(uid);
-
-          if (!active) {
-            return;
-          }
-
-          if (
-            !auth.currentUser ||
-            auth.currentUser.uid !== uid
-          ) {
-            return;
-          }
-
-          setAuthorized(admin);
-        } catch {
-          if (!active) {
-            return;
-          }
-
-          if (
-            auth.currentUser &&
-            auth.currentUser.uid === uid
-          ) {
-            setAuthorized(false);
-          }
-        } finally {
-          if (
-            active &&
-            auth.currentUser &&
-            auth.currentUser.uid === uid
-          ) {
-            setLoading(false);
-          }
-        }
+      if (!currentUser) {
+        setAuthorized(false);
+        setLoading(false);
+        return;
       }
-    );
 
-    return () => {
-      active = false;
-      unsubscribe();
-    };
+      try {
+        const admin = await isAdmin(currentUser.uid);
+        setAuthorized(admin);
+      } catch {
+        setAuthorized(false);
+      }
+
+      setLoading(false);
+    });
   }, []);
 
   useEffect(() => {
     if (!authorized) {
       return;
     }
-
-    let active = true;
 
     async function load() {
       try {
@@ -158,23 +112,11 @@ export default function AdminPage() {
           getAllBans(),
         ]);
 
-        if (!active) {
-          return;
-        }
-
-        if (!auth.currentUser) {
-          return;
-        }
-
         setProjects(projectData);
         setUsers(userData);
         setReports(reportData);
         setBans(banData);
       } catch (error: any) {
-        if (!active) {
-          return;
-        }
-
         setActionError(
           error?.message || "Unable to load moderation data."
         );
@@ -182,10 +124,6 @@ export default function AdminPage() {
     }
 
     load();
-
-    return () => {
-      active = false;
-    };
   }, [authorized]);
 
   function flashSuccess(message: string) {
@@ -272,8 +210,7 @@ export default function AdminPage() {
   }, [reports, search]);
 
   const openReports = reports.filter(
-    (report) =>
-      !report.status || report.status === "open"
+    (report) => !report.status || report.status === "open"
   );
 
   const activeBans = bans.filter(
@@ -343,13 +280,10 @@ export default function AdminPage() {
       setDeleteProject(null);
       setDeleteReason("");
 
-      flashSuccess(
-        "Project deleted and creator notified."
-      );
+      flashSuccess("Project deleted and creator notified.");
     } catch (error: any) {
       flashError(
-        error?.message ||
-          "Unable to delete the project."
+        error?.message || "Unable to delete the project."
       );
     } finally {
       setDeleting(false);
@@ -391,8 +325,7 @@ export default function AdminPage() {
       );
     } catch (error: any) {
       flashError(
-        error?.message ||
-          "Unable to update report."
+        error?.message || "Unable to update report."
       );
     }
   }
@@ -421,8 +354,7 @@ export default function AdminPage() {
         );
 
         if (duration) {
-          bannedUntil =
-            Date.now() + duration.value;
+          bannedUntil = Date.now() + duration.value;
         }
       }
 
@@ -460,8 +392,7 @@ export default function AdminPage() {
       flashSuccess("User banned and notified.");
     } catch (error: any) {
       flashError(
-        error?.message ||
-          "Unable to ban this user."
+        error?.message || "Unable to ban this user."
       );
     } finally {
       setBanning(false);
@@ -479,8 +410,7 @@ export default function AdminPage() {
       flashSuccess("User unbanned.");
     } catch (error: any) {
       flashError(
-        error?.message ||
-          "Unable to remove the ban."
+        error?.message || "Unable to remove the ban."
       );
     }
   }
@@ -505,15 +435,12 @@ export default function AdminPage() {
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border border-red-400/20 bg-red-400/10 text-3xl">
             !
           </div>
-
           <p className="mt-8 text-sm font-medium uppercase tracking-widest text-red-400">
             ACCESS DENIED
           </p>
-
           <h1 className="mt-3 text-4xl font-black">
             Sign in required.
           </h1>
-
           <Link
             href="/login"
             className="forge-button mt-8 inline-flex rounded-2xl bg-white px-6 py-3.5 font-semibold text-black"
@@ -532,20 +459,16 @@ export default function AdminPage() {
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border border-red-400/20 bg-red-400/10 text-3xl">
             ⛔
           </div>
-
           <p className="mt-8 text-sm font-medium uppercase tracking-widest text-red-400">
             ADMIN ONLY
           </p>
-
           <h1 className="mt-3 text-4xl font-black">
             You don't have access.
           </h1>
-
           <p className="mt-4 leading-7 text-zinc-500">
             This area is restricted to authorized Forge
             administrators.
           </p>
-
           <Link
             href="/"
             className="forge-button mt-8 inline-flex rounded-2xl border border-white/10 bg-white/[0.05] px-6 py-3.5 font-semibold text-white"
@@ -569,19 +492,16 @@ export default function AdminPage() {
           <p className="text-sm font-medium uppercase tracking-[0.3em] text-violet-400">
             FORGE ADMIN
           </p>
-
           <div className="mt-3 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
               <h1 className="text-4xl font-black tracking-tight sm:text-6xl">
                 Command Center
               </h1>
-
               <p className="mt-4 max-w-2xl text-zinc-500">
                 Manage projects, reports, users, and
                 moderation from one place.
               </p>
             </div>
-
             <Link
               href="/"
               className="forge-button inline-flex w-fit rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-zinc-300 hover:bg-white/[0.08] hover:text-white"
@@ -662,11 +582,9 @@ export default function AdminPage() {
                 <p className="text-sm text-zinc-500">
                   {title}
                 </p>
-
                 <p className="mt-3 text-4xl font-black">
                   {value}
                 </p>
-
                 <p className="mt-2 text-xs text-zinc-600">
                   {subtitle}
                 </p>
@@ -714,7 +632,6 @@ export default function AdminPage() {
                         <span className="rounded-lg bg-violet-400/10 px-2.5 py-1 text-xs text-violet-300">
                           {project.category}
                         </span>
-
                         <span className="text-xs text-zinc-600">
                           {formatDate(project.createdAt)}
                         </span>
@@ -745,7 +662,6 @@ export default function AdminPage() {
                       >
                         View
                       </Link>
-
                       <button
                         type="button"
                         onClick={() => {
@@ -774,7 +690,6 @@ export default function AdminPage() {
           <div className="mt-5 space-y-3">
             {filteredReports.map((report) => {
               const reporter = getUser(report.reporterId);
-
               const targetUser =
                 report.targetType === "user"
                   ? getUser(report.targetId)
@@ -823,7 +738,6 @@ export default function AdminPage() {
                               report.reporterId}
                           </span>
                         </p>
-
                         <p>
                           Target:{" "}
                           <span className="text-zinc-400">
@@ -832,7 +746,6 @@ export default function AdminPage() {
                               report.targetId}
                           </span>
                         </p>
-
                         <p>
                           Submitted:{" "}
                           {formatDate(report.createdAt)}
@@ -855,7 +768,6 @@ export default function AdminPage() {
                         >
                           Resolve
                         </button>
-
                         <button
                           type="button"
                           onClick={() =>
@@ -906,11 +818,9 @@ export default function AdminPage() {
                           />
                         ) : (
                           <span className="font-bold text-zinc-500">
-                            {(
-                              userItem.displayName ||
+                            {(userItem.displayName ||
                               userItem.username ||
-                              "?"
-                            )[0].toUpperCase()}
+                              "?")[0].toUpperCase()}
                           </span>
                         )}
                       </div>
@@ -921,11 +831,9 @@ export default function AdminPage() {
                             userItem.username ||
                             "Unnamed user"}
                         </p>
-
                         <p className="truncate text-sm text-zinc-500">
                           @{userItem.username || "unknown"}
                         </p>
-
                         <p className="mt-1 truncate text-xs text-zinc-600">
                           {userItem.uid}
                         </p>
@@ -1020,15 +928,12 @@ export default function AdminPage() {
                             target?.username ||
                             ban.uid}
                         </p>
-
                         <p className="mt-1 text-xs text-zinc-600">
                           {ban.uid}
                         </p>
-
                         <p className="mt-3 text-sm text-zinc-400">
                           {ban.reason}
                         </p>
-
                         <p className="mt-2 text-xs text-zinc-600">
                           {formatBan(ban)}
                         </p>
@@ -1036,9 +941,7 @@ export default function AdminPage() {
 
                       <button
                         type="button"
-                        onClick={() =>
-                          handleUnban(ban.uid)
-                        }
+                        onClick={() => handleUnban(ban.uid)}
                         className="forge-button rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-300 hover:bg-emerald-400/15"
                       >
                         Unban
@@ -1150,7 +1053,6 @@ export default function AdminPage() {
                   {duration.label}
                 </option>
               ))}
-
               <option
                 value="permanent"
                 className="bg-[#0b0b0b]"
@@ -1188,9 +1090,7 @@ export default function AdminPage() {
                 onClick={handleBan}
                 className="forge-button rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-400 disabled:opacity-50"
               >
-                {banning
-                  ? "Banning..."
-                  : "Ban user"}
+                {banning ? "Banning..." : "Ban user"}
               </button>
             </div>
           </div>

@@ -5,7 +5,7 @@ import {
   set,
   update,
 } from "firebase/database";
-import { auth } from "./auth";
+
 import { database } from "./database";
 
 export interface AdminProject {
@@ -66,21 +66,7 @@ export interface UserBan {
 }
 
 export async function isAdmin(uid: string) {
-  const currentUser = auth.currentUser;
-
-  if (!currentUser || currentUser.uid !== uid) {
-    return false;
-  }
-
-  const snapshot = await get(
-    ref(database, `admins/${uid}`)
-  );
-
-  const latestUser = auth.currentUser;
-
-  if (!latestUser || latestUser.uid !== uid) {
-    return false;
-  }
+  const snapshot = await get(ref(database, `admins/${uid}`));
 
   return snapshot.exists() && snapshot.val() === true;
 }
@@ -98,10 +84,7 @@ export async function getAdminProjects(): Promise<AdminProject[]> {
       id,
       ...(project as Omit<AdminProject, "id">),
     }))
-    .sort(
-      (a, b) =>
-        (b.createdAt || 0) - (a.createdAt || 0)
-    );
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 }
 
 export async function getAdminUsers(): Promise<AdminUser[]> {
@@ -132,9 +115,7 @@ export async function getAdminReports(): Promise<AdminReport[]> {
       id,
       ...(report as Omit<AdminReport, "id">),
     }))
-    .sort(
-      (a, b) => b.createdAt - a.createdAt
-    );
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function updateReportStatus(
@@ -142,22 +123,15 @@ export async function updateReportStatus(
   status: "resolved" | "denied",
   adminUid: string
 ) {
-  await update(
-    ref(database, `reports/${reportId}`),
-    {
-      status,
-      resolvedBy: adminUid,
-      resolvedAt: Date.now(),
-    }
-  );
+  await update(ref(database, `reports/${reportId}`), {
+    status,
+    resolvedBy: adminUid,
+    resolvedAt: Date.now(),
+  });
 }
 
-export async function deleteAdminProject(
-  projectId: string
-) {
-  await remove(
-    ref(database, `projects/${projectId}`)
-  );
+export async function deleteAdminProject(projectId: string) {
+  await remove(ref(database, `projects/${projectId}`));
 }
 
 export async function createBan(
@@ -187,24 +161,17 @@ export async function createBan(
     permanent,
   };
 
-  await set(
-    ref(database, `bans/${uid}`),
-    ban
-  );
+  await set(ref(database, `bans/${uid}`), ban);
 
   return ban;
 }
 
 export async function removeBan(uid: string) {
-  await remove(
-    ref(database, `bans/${uid}`)
-  );
+  await remove(ref(database, `bans/${uid}`));
 }
 
 export async function getAllBans(): Promise<UserBan[]> {
-  const snapshot = await get(
-    ref(database, "bans")
-  );
+  const snapshot = await get(ref(database, "bans"));
 
   if (!snapshot.exists()) {
     return [];
@@ -218,12 +185,8 @@ export async function getAllBans(): Promise<UserBan[]> {
     }));
 }
 
-export async function getUserBan(
-  uid: string
-): Promise<UserBan | null> {
-  const snapshot = await get(
-    ref(database, `bans/${uid}`)
-  );
+export async function getUserBan(uid: string): Promise<UserBan | null> {
+  const snapshot = await get(ref(database, `bans/${uid}`));
 
   if (!snapshot.exists()) {
     return null;
