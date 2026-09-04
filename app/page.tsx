@@ -131,6 +131,7 @@ export default function Home() {
           <div className="mx-auto max-w-4xl text-center">
 
             <h1 className="forge-stagger-2 text-6xl font-black tracking-[-0.05em] sm:text-7xl md:text-8xl">
+              
               Build something
               <br />
               <span className="bg-gradient-to-r from-white via-zinc-300 to-zinc-600 bg-clip-text text-transparent">
