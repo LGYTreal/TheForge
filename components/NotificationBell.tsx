@@ -3,13 +3,17 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  getNotifications,
+  onValue,
+  ref,
+} from "firebase/database";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/firebase/auth";
+import { database } from "@/firebase/database";
+import {
   markAllNotificationsRead,
   markNotificationRead,
   ForgeNotification,
 } from "@/firebase/notifications";
-import { auth } from "@/firebase/auth";
-import { onAuthStateChanged } from "firebase/auth";
 
 export default function NotificationBell() {
   const [userId, setUserId] = useState<string | null>(null);
@@ -20,43 +24,81 @@ export default function NotificationBell() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setUserId(null);
-        setNotifications([]);
-        setLoading(false);
-        return;
+    let notificationUnsubscribe: (() => void) | null = null;
+
+    const authUnsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (notificationUnsubscribe) {
+          notificationUnsubscribe();
+          notificationUnsubscribe = null;
+        }
+
+        if (!user) {
+          setUserId(null);
+          setNotifications([]);
+          setLoading(false);
+          return;
+        }
+
+        setUserId(user.uid);
+        setLoading(true);
+
+        const notificationsRef = ref(
+          database,
+          `notifications/${user.uid}`
+        );
+
+        notificationUnsubscribe = onValue(
+          notificationsRef,
+          (snapshot) => {
+            if (!snapshot.exists()) {
+              setNotifications([]);
+              setLoading(false);
+              return;
+            }
+
+            const data = snapshot.val();
+
+            const items: ForgeNotification[] = Object.entries(
+              data
+            )
+              .filter(
+                ([, notification]) =>
+                  notification &&
+                  typeof notification === "object"
+              )
+              .map(([id, notification]) => ({
+                id,
+                ...(notification as Omit<
+                  ForgeNotification,
+                  "id"
+                >),
+              }))
+              .sort(
+                (a, b) =>
+                  b.createdAt - a.createdAt
+              );
+
+            setNotifications(items);
+            setLoading(false);
+          },
+          () => {
+            setNotifications([]);
+            setLoading(false);
+          }
+        );
       }
+    );
 
-      setUserId(user.uid);
+    return () => {
+      authUnsubscribe();
 
-      try {
-        const items = await getNotifications(user.uid);
-        setNotifications(items);
-      } catch {
-        setNotifications([]);
-      } finally {
-        setLoading(false);
+      if (notificationUnsubscribe) {
+        notificationUnsubscribe();
       }
-    });
-
-    return () => unsubscribe();
+    };
   }, []);
-
-  useEffect(() => {
-    if (!userId) {
-      return;
-    }
-
-    const interval = window.setInterval(async () => {
-      try {
-        const items = await getNotifications(userId);
-        setNotifications(items);
-      } catch {}
-    }, 15000);
-
-    return () => window.clearInterval(interval);
-  }, [userId]);
 
   if (!userId) {
     return null;
@@ -71,14 +113,16 @@ export default function NotificationBell() {
       return;
     }
 
-    await markAllNotificationsRead(userId);
+    try {
+      await markAllNotificationsRead(userId);
 
-    setNotifications((current) =>
-      current.map((notification) => ({
-        ...notification,
-        read: true,
-      }))
-    );
+      setNotifications((current) =>
+        current.map((notification) => ({
+          ...notification,
+          read: true,
+        }))
+      );
+    } catch {}
   }
 
   async function handleNotificationClick(
@@ -88,39 +132,47 @@ export default function NotificationBell() {
       return;
     }
 
-    await markNotificationRead(
-      userId,
-      notification.id
-    );
+    try {
+      await markNotificationRead(
+        userId,
+        notification.id
+      );
 
-    setNotifications((current) =>
-      current.map((item) =>
-        item.id === notification.id
-          ? { ...item, read: true }
-          : item
-      )
-    );
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id === notification.id
+            ? {
+                ...item,
+                read: true,
+              }
+            : item
+        )
+      );
+    } catch {}
   }
 
   function getNotificationHref(
     notification: ForgeNotification
   ) {
     if (
-      notification.type === "collaboration_request" &&
+      notification.type ===
+        "collaboration_request" &&
       notification.projectId
     ) {
       return `/projects/${notification.projectId}`;
     }
 
     if (
-      notification.type === "collaboration_accepted" &&
+      notification.type ===
+        "collaboration_accepted" &&
       notification.projectId
     ) {
       return `/projects/${notification.projectId}`;
     }
 
     if (
-      notification.type === "collaboration_declined" &&
+      notification.type ===
+        "collaboration_declined" &&
       notification.projectId
     ) {
       return `/projects/${notification.projectId}`;
@@ -129,12 +181,38 @@ export default function NotificationBell() {
     return "/profile";
   }
 
+  function getNotificationIcon(
+    type: ForgeNotification["type"]
+  ) {
+    if (type === "follow") {
+      return "👤";
+    }
+
+    if (type === "moderation") {
+      return "🛡️";
+    }
+
+    if (type === "collaboration_request") {
+      return "↗";
+    }
+
+    if (type === "collaboration_accepted") {
+      return "✓";
+    }
+
+    if (type === "collaboration_declined") {
+      return "×";
+    }
+
+    return "•";
+  }
+
   return (
     <div className="relative">
       <button
         type="button"
         aria-label="Notifications"
-        onClick={() => setOpen(!open)}
+        onClick={() => setOpen((current) => !current)}
         className="forge-button relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-zinc-400 transition hover:bg-white/10 hover:text-white"
       >
         <svg
@@ -153,7 +231,9 @@ export default function NotificationBell() {
 
         {unreadCount > 0 && (
           <span className="absolute -right-1 -top-1 flex min-h-5 min-w-5 items-center justify-center rounded-full border border-[#050505] bg-violet-500 px-1 text-[10px] font-bold text-white">
-            {unreadCount > 99 ? "99+" : unreadCount}
+            {unreadCount > 99
+              ? "99+"
+              : unreadCount}
           </span>
         )}
       </button>
@@ -173,6 +253,7 @@ export default function NotificationBell() {
                 <p className="font-semibold text-white">
                   Notifications
                 </p>
+
                 <p className="mt-0.5 text-xs text-zinc-600">
                   {unreadCount
                     ? `${unreadCount} unread`
@@ -214,9 +295,13 @@ export default function NotificationBell() {
                 notifications.map((notification) => (
                   <Link
                     key={notification.id}
-                    href={getNotificationHref(notification)}
+                    href={getNotificationHref(
+                      notification
+                    )}
                     onClick={() =>
-                      handleNotificationClick(notification)
+                      handleNotificationClick(
+                        notification
+                      )
                     }
                     className={`block border-b border-white/5 px-5 py-4 transition hover:bg-white/[0.04] ${
                       notification.read
@@ -232,16 +317,9 @@ export default function NotificationBell() {
                             : "bg-violet-500/10 text-violet-300"
                         }`}
                       >
-                        {notification.type ===
-                        "collaboration_request"
-                          ? "↗"
-                          : notification.type ===
-                            "collaboration_accepted"
-                            ? "✓"
-                            : notification.type ===
-                              "collaboration_declined"
-                              ? "×"
-                              : "•"}
+                        {getNotificationIcon(
+                          notification.type
+                        )}
                       </div>
 
                       <div className="min-w-0 flex-1">
@@ -257,6 +335,12 @@ export default function NotificationBell() {
 
                         <p className="mt-1 text-xs leading-5 text-zinc-500">
                           {notification.message}
+                        </p>
+
+                        <p className="mt-2 text-[10px] text-zinc-700">
+                          {new Date(
+                            notification.createdAt
+                          ).toLocaleString()}
                         </p>
                       </div>
                     </div>

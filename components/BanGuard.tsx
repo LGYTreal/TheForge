@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onValue, ref } from "firebase/database";
+import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/firebase/auth";
-import { getUserBan, UserBan } from "@/firebase/admin";
+import { database } from "@/firebase/database";
 import { getUserProfile, ForgeUser } from "@/firebase/users";
+import { UserBan } from "@/firebase/admin";
 
 function formatDuration(milliseconds: number) {
   if (milliseconds <= 0) {
@@ -48,122 +50,139 @@ export default function BanGuard({
 
   useEffect(() => {
     let mounted = true;
-    let refreshTimer: ReturnType<typeof setInterval> | null = null;
+    let unsubscribeBan: (() => void) | null = null;
 
-    async function checkBan(user: User | null) {
-      if (!mounted) return;
+    const unsubscribeAuth = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (unsubscribeBan) {
+          unsubscribeBan();
+          unsubscribeBan = null;
+        }
 
-      setChecking(true);
+        if (!user) {
+          if (mounted) {
+            setBan(null);
+            setAdmin(null);
+            setRemaining(null);
+            setChecking(false);
+          }
 
-      if (!user) {
-        setBan(null);
-        setAdmin(null);
-        setRemaining(null);
-        setChecking(false);
-        return;
-      }
-
-      try {
-        const currentBan = await getUserBan(user.uid);
-
-        if (!mounted) return;
-
-        if (!currentBan) {
-          setBan(null);
-          setAdmin(null);
-          setRemaining(null);
-          setChecking(false);
           return;
         }
 
-        if (
-          !currentBan.permanent &&
-          currentBan.bannedUntil !== null &&
-          currentBan.bannedUntil <= Date.now()
-        ) {
-          setBan(null);
-          setAdmin(null);
-          setRemaining(null);
-          setChecking(false);
-          return;
-        }
+        setChecking(true);
 
-        setBan(currentBan);
+        const banRef = ref(
+          database,
+          `bans/${user.uid}`
+        );
 
-        if (currentBan.permanent) {
-          setRemaining(null);
-        } else if (currentBan.bannedUntil !== null) {
-          setRemaining(
-            Math.max(0, currentBan.bannedUntil - Date.now())
-          );
-        } else {
-          setRemaining(null);
-        }
-
-        if (currentBan.bannedBy) {
-          try {
-            const adminProfile = await getUserProfile(
-              currentBan.bannedBy
-            );
-
-            if (mounted) {
-              setAdmin(adminProfile);
+        unsubscribeBan = onValue(
+          banRef,
+          async (snapshot) => {
+            if (!mounted) {
+              return;
             }
-          } catch {
-            if (mounted) {
+
+            if (!snapshot.exists()) {
+              setBan(null);
+              setAdmin(null);
+              setRemaining(null);
+              setChecking(false);
+              return;
+            }
+
+            const currentBan: UserBan = {
+              uid: user.uid,
+              ...(snapshot.val() as Omit<UserBan, "uid">),
+            };
+
+            if (
+              !currentBan.permanent &&
+              currentBan.bannedUntil !== null &&
+              currentBan.bannedUntil <= Date.now()
+            ) {
+              setBan(null);
+              setAdmin(null);
+              setRemaining(null);
+              setChecking(false);
+              return;
+            }
+
+            setBan(currentBan);
+
+            if (
+              !currentBan.permanent &&
+              currentBan.bannedUntil !== null
+            ) {
+              setRemaining(
+                Math.max(
+                  0,
+                  currentBan.bannedUntil - Date.now()
+                )
+              );
+            } else {
+              setRemaining(null);
+            }
+
+            if (currentBan.bannedBy) {
+              try {
+                const adminProfile =
+                  await getUserProfile(
+                    currentBan.bannedBy
+                  );
+
+                if (mounted) {
+                  setAdmin(adminProfile);
+                }
+              } catch {
+                if (mounted) {
+                  setAdmin(null);
+                }
+              }
+            } else {
               setAdmin(null);
             }
+
+            if (mounted) {
+              setChecking(false);
+            }
+          },
+          () => {
+            if (!mounted) {
+              return;
+            }
+
+            setBan(null);
+            setAdmin(null);
+            setRemaining(null);
+            setChecking(false);
           }
-        } else {
-          setAdmin(null);
-        }
-
-        if (mounted) {
-          setChecking(false);
-        }
-      } catch (error) {
-        console.error("BanGuard failed to check ban status:", error);
-
-        if (mounted) {
-          setBan(null);
-          setAdmin(null);
-          setRemaining(null);
-          setChecking(false);
-        }
+        );
       }
-    }
-
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (refreshTimer) {
-        clearInterval(refreshTimer);
-        refreshTimer = null;
-      }
-
-      checkBan(user);
-
-      if (user) {
-        refreshTimer = setInterval(() => {
-          checkBan(user);
-        }, 10000);
-      }
-    });
+    );
 
     return () => {
       mounted = false;
-      unsubscribe();
+      unsubscribeAuth();
 
-      if (refreshTimer) {
-        clearInterval(refreshTimer);
+      if (unsubscribeBan) {
+        unsubscribeBan();
       }
     };
   }, []);
 
   useEffect(() => {
-    if (!ban || ban.permanent || ban.bannedUntil === null) {
+    if (
+      !ban ||
+      ban.permanent ||
+      ban.bannedUntil === null
+    ) {
       return;
     }
 
-    const update = () => {
+    const updateRemaining = () => {
       const timeLeft = Math.max(
         0,
         ban.bannedUntil! - Date.now()
@@ -178,12 +197,15 @@ export default function BanGuard({
       }
     };
 
-    update();
+    updateRemaining();
 
-    const timer = setInterval(update, 1000);
+    const timer = window.setInterval(
+      updateRemaining,
+      1000
+    );
 
     return () => {
-      clearInterval(timer);
+      window.clearInterval(timer);
     };
   }, [ban]);
 
@@ -192,7 +214,6 @@ export default function BanGuard({
       <main className="flex min-h-screen items-center justify-center bg-[#050505] text-white">
         <div className="text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-white" />
-
           <p className="mt-5 text-sm text-zinc-500">
             Checking account status...
           </p>
@@ -211,7 +232,6 @@ export default function BanGuard({
       <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] px-6 py-16 text-white">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute left-1/2 top-[-300px] h-[650px] w-[650px] -translate-x-1/2 rounded-full bg-red-600/10 blur-[160px]" />
-
           <div className="absolute bottom-[-250px] left-1/2 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-violet-600/10 blur-[150px]" />
         </div>
 
@@ -273,7 +293,9 @@ export default function BanGuard({
                   <p className="mt-2 text-2xl font-black text-white">
                     {ban.permanent
                       ? "Permanent"
-                      : formatDuration(remaining || 0)}
+                      : formatDuration(
+                          remaining || 0
+                        )}
                   </p>
 
                   {!ban.permanent &&

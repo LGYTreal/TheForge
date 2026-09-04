@@ -291,44 +291,60 @@ export default function AdminPage() {
   }
 
   async function handleReportStatus(
-    report: AdminReport,
-    status: "resolved" | "denied"
-  ) {
-    if (!user) {
-      return;
-    }
-
-    try {
-      await updateReportStatus(
-        report.id,
-        status,
-        user.uid
-      );
-
-      setReports((current) =>
-        current.map((item) =>
-          item.id === report.id
-            ? {
-                ...item,
-                status,
-                resolvedBy: user.uid,
-                resolvedAt: Date.now(),
-              }
-            : item
-        )
-      );
-
-      flashSuccess(
-        status === "resolved"
-          ? "Report marked as resolved."
-          : "Report denied."
-      );
-    } catch (error: any) {
-      flashError(
-        error?.message || "Unable to update report."
-      );
-    }
+  report: AdminReport,
+  status: "resolved" | "denied"
+) {
+  if (!user) {
+    return;
   }
+
+  try {
+    await updateReportStatus(
+      report.id,
+      status,
+      user.uid
+    );
+
+    await createNotification(report.reporterId, {
+      type: "moderation",
+      title:
+        status === "resolved"
+          ? "Report resolved"
+          : "Report denied",
+      message:
+        status === "resolved"
+          ? "Your report has been reviewed and resolved by a Forge administrator."
+          : "Your report has been reviewed and denied by a Forge administrator.",
+      actorId: user.uid,
+      targetId: report.id,
+      read: false,
+      createdAt: Date.now(),
+    });
+
+    setReports((current) =>
+      current.map((item) =>
+        item.id === report.id
+          ? {
+              ...item,
+              status,
+              resolvedBy: user.uid,
+              resolvedAt: Date.now(),
+            }
+          : item
+      )
+    );
+
+    flashSuccess(
+      status === "resolved"
+        ? "Report marked as resolved."
+        : "Report denied."
+    );
+  } catch (error: any) {
+    flashError(
+      error?.message || "Unable to update report."
+    );
+  }
+}
 
   async function handleBan() {
     if (!banUser || !user) {
@@ -365,19 +381,6 @@ export default function AdminPage() {
         user.uid
       );
 
-      await createNotification(banUser.uid, {
-        type: "moderation",
-        title: "Your Forge account has been banned",
-        message: ban.permanent
-          ? `You have been permanently banned from Forge. Reason: ${reason}`
-          : `You have been banned from Forge until ${formatDate(
-              bannedUntil!
-            )}. Reason: ${reason}`,
-        actorId: user.uid,
-        read: false,
-        createdAt: Date.now(),
-      });
-
       setBans((current) => [
         ...current.filter(
           (item) => item.uid !== banUser.uid
@@ -389,7 +392,7 @@ export default function AdminPage() {
       setBanReason("");
       setBanDuration("86400000");
 
-      flashSuccess("User banned and notified.");
+      flashSuccess("User banned.");
     } catch (error: any) {
       flashError(
         error?.message || "Unable to ban this user."
