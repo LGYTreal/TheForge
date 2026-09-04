@@ -1,3 +1,4 @@
+import BanGuard from "@/components/BanGuard";
 import type { Metadata } from "next";
 import "./globals.css";
 import ForgePreferences from "@/components/ForgePreferences";
@@ -16,7 +17,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <ForgePreferences />
-        {children}
+        <BanGuard>{children}</BanGuard>
       </body>
     </html>
   );
