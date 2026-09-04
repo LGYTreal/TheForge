@@ -6,6 +6,8 @@ import {
 } from "firebase/database";
 
 import { database } from "./database";
+import { createNotification } from "./notifications";
+import { getUserProfile } from "./users";
 
 export async function isFollowing(
   followerUid: string,
@@ -26,16 +28,53 @@ export async function followUser(
     return;
   }
 
+  const alreadyFollowing = await isFollowing(
+    followerUid,
+    targetUid
+  );
+
   await Promise.all([
     set(
-      ref(database, `following/${followerUid}/${targetUid}`),
+      ref(
+        database,
+        `following/${followerUid}/${targetUid}`
+      ),
       true
     ),
     set(
-      ref(database, `followers/${targetUid}/${followerUid}`),
+      ref(
+        database,
+        `followers/${targetUid}/${followerUid}`
+      ),
       true
     ),
   ]);
+
+  if (!alreadyFollowing) {
+    let username = "Someone";
+
+    try {
+      const profile = await getUserProfile(followerUid);
+
+      if (profile?.username) {
+        username = `@${profile.username}`;
+      } else if (profile?.displayName) {
+        username = profile.displayName;
+      }
+    } catch {}
+
+    try {
+      await createNotification(targetUid, {
+        type: "follow",
+        title: "New follower",
+        message: `${username} started following you.`,
+        createdAt: Date.now(),
+        read: false,
+        fromUid: followerUid,
+        targetId: followerUid,
+      });
+    } catch {}
+  }
 }
 
 export async function unfollowUser(
@@ -44,10 +83,16 @@ export async function unfollowUser(
 ) {
   await Promise.all([
     remove(
-      ref(database, `following/${followerUid}/${targetUid}`)
+      ref(
+        database,
+        `following/${followerUid}/${targetUid}`
+      )
     ),
     remove(
-      ref(database, `followers/${targetUid}/${followerUid}`)
+      ref(
+        database,
+        `followers/${targetUid}/${followerUid}`
+      )
     ),
   ]);
 }
