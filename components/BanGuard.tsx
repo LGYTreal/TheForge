@@ -48,26 +48,25 @@ export default function BanGuard({
 
   useEffect(() => {
     let mounted = true;
-    let refreshTimer: number | null = null;
+    let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
     async function checkBan(user: User | null) {
-      if (!user) {
-        if (mounted) {
-          setBan(null);
-          setAdmin(null);
-          setRemaining(null);
-          setChecking(false);
-        }
+      if (!mounted) return;
 
+      setChecking(true);
+
+      if (!user) {
+        setBan(null);
+        setAdmin(null);
+        setRemaining(null);
+        setChecking(false);
         return;
       }
 
       try {
         const currentBan = await getUserBan(user.uid);
 
-        if (!mounted) {
-          return;
-        }
+        if (!mounted) return;
 
         if (!currentBan) {
           setBan(null);
@@ -79,7 +78,7 @@ export default function BanGuard({
 
         if (
           !currentBan.permanent &&
-          currentBan.bannedUntil &&
+          currentBan.bannedUntil !== null &&
           currentBan.bannedUntil <= Date.now()
         ) {
           setBan(null);
@@ -90,6 +89,16 @@ export default function BanGuard({
         }
 
         setBan(currentBan);
+
+        if (currentBan.permanent) {
+          setRemaining(null);
+        } else if (currentBan.bannedUntil !== null) {
+          setRemaining(
+            Math.max(0, currentBan.bannedUntil - Date.now())
+          );
+        } else {
+          setRemaining(null);
+        }
 
         if (currentBan.bannedBy) {
           try {
@@ -109,22 +118,12 @@ export default function BanGuard({
           setAdmin(null);
         }
 
-        if (
-          !currentBan.permanent &&
-          currentBan.bannedUntil
-        ) {
-          setRemaining(
-            Math.max(
-              0,
-              currentBan.bannedUntil - Date.now()
-            )
-          );
-        } else {
-          setRemaining(null);
+        if (mounted) {
+          setChecking(false);
         }
+      } catch (error) {
+        console.error("BanGuard failed to check ban status:", error);
 
-        setChecking(false);
-      } catch {
         if (mounted) {
           setBan(null);
           setAdmin(null);
@@ -134,35 +133,33 @@ export default function BanGuard({
       }
     }
 
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      async (user) => {
-        await checkBan(user);
-
-        if (refreshTimer) {
-          window.clearInterval(refreshTimer);
-        }
-
-        if (user) {
-          refreshTimer = window.setInterval(() => {
-            checkBan(user);
-          }, 10000);
-        }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (refreshTimer) {
+        clearInterval(refreshTimer);
+        refreshTimer = null;
       }
-    );
+
+      checkBan(user);
+
+      if (user) {
+        refreshTimer = setInterval(() => {
+          checkBan(user);
+        }, 10000);
+      }
+    });
 
     return () => {
       mounted = false;
       unsubscribe();
 
       if (refreshTimer) {
-        window.clearInterval(refreshTimer);
+        clearInterval(refreshTimer);
       }
     };
   }, []);
 
   useEffect(() => {
-    if (!ban || ban.permanent || !ban.bannedUntil) {
+    if (!ban || ban.permanent || ban.bannedUntil === null) {
       return;
     }
 
@@ -177,15 +174,16 @@ export default function BanGuard({
       if (timeLeft <= 0) {
         setBan(null);
         setAdmin(null);
+        setRemaining(null);
       }
     };
 
     update();
 
-    const timer = window.setInterval(update, 1000);
+    const timer = setInterval(update, 1000);
 
     return () => {
-      window.clearInterval(timer);
+      clearInterval(timer);
     };
   }, [ban]);
 
@@ -194,6 +192,7 @@ export default function BanGuard({
       <main className="flex min-h-screen items-center justify-center bg-[#050505] text-white">
         <div className="text-center">
           <div className="mx-auto h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-white" />
+
           <p className="mt-5 text-sm text-zinc-500">
             Checking account status...
           </p>
@@ -212,6 +211,7 @@ export default function BanGuard({
       <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#050505] px-6 py-16 text-white">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute left-1/2 top-[-300px] h-[650px] w-[650px] -translate-x-1/2 rounded-full bg-red-600/10 blur-[160px]" />
+
           <div className="absolute bottom-[-250px] left-1/2 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-violet-600/10 blur-[150px]" />
         </div>
 
@@ -259,7 +259,7 @@ export default function BanGuard({
                   </p>
 
                   <p className="mt-2 text-sm leading-7 text-zinc-300">
-                    {ban.reason}
+                    {ban.reason || "No reason was provided."}
                   </p>
                 </div>
 
@@ -277,7 +277,7 @@ export default function BanGuard({
                   </p>
 
                   {!ban.permanent &&
-                    ban.bannedUntil && (
+                    ban.bannedUntil !== null && (
                       <p className="mt-2 text-xs text-zinc-600">
                         Ban ends{" "}
                         {new Date(
