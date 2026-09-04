@@ -4,12 +4,31 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth, signOut } from "@/firebase/auth";
+import { isAdmin } from "@/firebase/admin";
 
 export default function Navbar() {
   const [user, setUser] = useState<User | null>(null);
+  const [admin, setAdmin] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (currentUser) => {
+        setUser(currentUser);
+
+        if (!currentUser) {
+          setAdmin(false);
+          return;
+        }
+
+        try {
+          setAdmin(await isAdmin(currentUser.uid));
+        } catch {
+          setAdmin(false);
+        }
+      }
+    );
+
     return () => unsubscribe();
   }, []);
 
@@ -59,6 +78,15 @@ export default function Navbar() {
               >
                 Settings
               </Link>
+
+              {admin && (
+                <Link
+                  href="/admin"
+                  className="rounded-xl px-4 py-2 text-sm font-medium text-violet-300 transition hover:bg-violet-400/10 hover:text-violet-200"
+                >
+                  Admin
+                </Link>
+              )}
             </>
           )}
         </div>

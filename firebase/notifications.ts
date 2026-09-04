@@ -15,7 +15,8 @@ export interface ForgeNotification {
     | "collaboration_accepted"
     | "collaboration_declined"
     | "follow"
-    | "project";
+    | "project"
+    | "moderation";
   title: string;
   message: string;
   actorId?: string;
