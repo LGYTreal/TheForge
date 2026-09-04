@@ -70,23 +70,32 @@ export default function ProjectFeatures({
     let mounted = true;
 
     async function load() {
-      const [likes, views, changelogData] = await Promise.all([
-        getProjectLikeCount(projectId),
-        getProjectViewCount(projectId),
-        getProjectChangelogs(projectId),
-      ]);
+      const [likesResult, viewsResult, changelogResult] =
+        await Promise.allSettled([
+          getProjectLikeCount(projectId),
+          getProjectViewCount(projectId),
+          getProjectChangelogs(projectId),
+        ]);
 
       if (!mounted) {
         return;
       }
 
-      setLikeCount(likes);
-      setViewCount(views);
-      setChangelogs(changelogData);
+      if (likesResult.status === "fulfilled") {
+        setLikeCount(likesResult.value);
+      }
+
+      if (viewsResult.status === "fulfilled") {
+        setViewCount(viewsResult.value);
+      }
+
+      if (changelogResult.status === "fulfilled") {
+        setChangelogs(changelogResult.value);
+      }
 
       if (currentUserId) {
-        const [likeState, favoriteState, blockState] =
-          await Promise.all([
+        const [likeStateResult, favoriteStateResult, blockStateResult] =
+          await Promise.allSettled([
             getProjectLikeState(projectId, currentUserId),
             getProjectFavoriteState(currentUserId, projectId),
             getBlockState(currentUserId, ownerId),
@@ -96,45 +105,58 @@ export default function ProjectFeatures({
           return;
         }
 
-        setLiked(likeState);
-        setFavorited(favoriteState);
-        setBlocked(blockState);
+        if (likeStateResult.status === "fulfilled") {
+          setLiked(likeStateResult.value);
+        }
+
+        if (favoriteStateResult.status === "fulfilled") {
+          setFavorited(favoriteStateResult.value);
+        }
+
+        if (blockStateResult.status === "fulfilled") {
+          setBlocked(blockStateResult.value);
+        }
 
         if (!isOwner) {
           try {
             await addProjectView(projectId, currentUserId);
 
             if (mounted) {
-              const updatedViews =
-                await getProjectViewCount(projectId);
-              setViewCount(updatedViews);
+              try {
+                const updatedViews =
+                  await getProjectViewCount(projectId);
+
+                setViewCount(updatedViews);
+              } catch {}
             }
           } catch {}
         }
       }
     }
 
-    load();
+    load().catch(() => {});
 
-    const unsubscribe = subscribeToProjectComments(
-      projectId,
-      (nextComments) => {
-        if (mounted) {
-          setComments(nextComments);
+    let unsubscribe: (() => void) | undefined;
+
+    try {
+      unsubscribe = subscribeToProjectComments(
+        projectId,
+        (nextComments) => {
+          if (mounted) {
+            setComments(nextComments);
+          }
         }
-      }
-    );
+      );
+    } catch {}
 
     return () => {
       mounted = false;
-      unsubscribe();
+
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
-  }, [
-    projectId,
-    currentUserId,
-    ownerId,
-    isOwner,
-  ]);
+  }, [projectId, currentUserId, ownerId, isOwner]);
 
   useEffect(() => {
     let cancelled = false;
@@ -146,9 +168,29 @@ export default function ProjectFeatures({
 
       const entries = await Promise.all(
         uniqueIds.map(async (uid) => {
-          const profile = await getUserProfile(uid);
+          try {
+            const profile = await getUserProfile(uid);
 
-          if (!profile) {
+            if (!profile) {
+              return [
+                uid,
+                {
+                  displayName: "Unknown user",
+                  username: "unknown",
+                },
+              ] as const;
+            }
+
+            return [
+              uid,
+              {
+                displayName:
+                  profile.displayName || profile.username,
+                username: profile.username,
+                avatar: profile.avatar,
+              },
+            ] as const;
+          } catch {
             return [
               uid,
               {
@@ -157,16 +199,6 @@ export default function ProjectFeatures({
               },
             ] as const;
           }
-
-          return [
-            uid,
-            {
-              displayName:
-                profile.displayName || profile.username,
-              username: profile.username,
-              avatar: profile.avatar,
-            },
-          ] as const;
         })
       );
 
@@ -176,7 +208,7 @@ export default function ProjectFeatures({
     }
 
     if (comments.length > 0) {
-      loadAuthors();
+      loadAuthors().catch(() => {});
     } else {
       setCommentAuthors({});
     }
@@ -192,15 +224,17 @@ export default function ProjectFeatures({
       return;
     }
 
-    const nextState = await toggleProjectLike(
-      projectId,
-      currentUserId
-    );
+    try {
+      const nextState = await toggleProjectLike(
+        projectId,
+        currentUserId
+      );
 
-    setLiked(nextState);
-    setLikeCount((count) =>
-      nextState ? count + 1 : Math.max(0, count - 1)
-    );
+      setLiked(nextState);
+      setLikeCount((count) =>
+        nextState ? count + 1 : Math.max(0, count - 1)
+      );
+    } catch {}
   }
 
   async function handleFavorite() {
@@ -209,12 +243,14 @@ export default function ProjectFeatures({
       return;
     }
 
-    const nextState = await toggleProjectFavorite(
-      currentUserId,
-      projectId
-    );
+    try {
+      const nextState = await toggleProjectFavorite(
+        currentUserId,
+        projectId
+      );
 
-    setFavorited(nextState);
+      setFavorited(nextState);
+    } catch {}
   }
 
   async function handleShare() {
@@ -256,6 +292,7 @@ export default function ProjectFeatures({
         currentUserId,
         commentText
       );
+
       setCommentText("");
     } catch {
     } finally {
@@ -263,17 +300,17 @@ export default function ProjectFeatures({
     }
   }
 
-  async function handleDeleteComment(
-    commentId: string
-  ) {
+  async function handleDeleteComment(commentId: string) {
     if (!currentUserId) {
       return;
     }
 
-    await deleteProjectComment(
-      projectId,
-      commentId
-    );
+    try {
+      await deleteProjectComment(
+        projectId,
+        commentId
+      );
+    } catch {}
   }
 
   async function handleCreateChangelog() {
@@ -308,16 +345,18 @@ export default function ProjectFeatures({
   async function handleDeleteChangelog(
     changelogId: string
   ) {
-    await deleteProjectChangelog(
-      projectId,
-      changelogId
-    );
+    try {
+      await deleteProjectChangelog(
+        projectId,
+        changelogId
+      );
 
-    setChangelogs((current) =>
-      current.filter(
-        (item) => item.id !== changelogId
-      )
-    );
+      setChangelogs((current) =>
+        current.filter(
+          (item) => item.id !== changelogId
+        )
+      );
+    } catch {}
   }
 
   async function handleReport() {
@@ -367,8 +406,7 @@ export default function ProjectFeatures({
     }
   }
 
-  const ownerProfile =
-    commentAuthors[ownerId];
+  const ownerProfile = commentAuthors[ownerId];
 
   return (
     <div className="mt-10 space-y-6">
@@ -620,6 +658,7 @@ export default function ProjectFeatures({
             <h2 className="text-xl font-bold">
               Changelog
             </h2>
+
             <p className="mt-1 text-sm text-zinc-500">
               Updates and milestones from this project.
             </p>
@@ -706,6 +745,7 @@ export default function ProjectFeatures({
                     <h3 className="font-semibold text-zinc-200">
                       {changelog.title}
                     </h3>
+
                     <p className="mt-1 text-xs text-zinc-600">
                       {new Date(
                         changelog.createdAt
