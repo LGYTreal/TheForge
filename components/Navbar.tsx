@@ -11,25 +11,55 @@ export default function Navbar() {
   const [admin, setAdmin] = useState(false);
 
   useEffect(() => {
+    let active = true;
+
     const unsubscribe = onAuthStateChanged(
       auth,
       async (currentUser) => {
-        setUser(currentUser);
-
-        if (!currentUser) {
-          setAdmin(false);
+        if (!active) {
           return;
         }
 
+        setUser(currentUser);
+        setAdmin(false);
+
+        if (!currentUser) {
+          return;
+        }
+
+        const uid = currentUser.uid;
+
         try {
-          setAdmin(await isAdmin(currentUser.uid));
+          const isCurrentAdmin = await isAdmin(uid);
+
+          if (!active) {
+            return;
+          }
+
+          if (!auth.currentUser || auth.currentUser.uid !== uid) {
+            return;
+          }
+
+          setAdmin(isCurrentAdmin);
         } catch {
-          setAdmin(false);
+          if (!active) {
+            return;
+          }
+
+          if (
+            auth.currentUser &&
+            auth.currentUser.uid === uid
+          ) {
+            setAdmin(false);
+          }
         }
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   async function handleLogout() {
@@ -39,10 +69,14 @@ export default function Navbar() {
   return (
     <header className="fixed left-0 right-0 top-0 z-50">
       <nav className="mx-auto mt-4 flex max-w-7xl items-center justify-between rounded-2xl border border-white/10 bg-black/40 px-5 py-3 shadow-2xl shadow-black/20 backdrop-blur-xl">
-        <Link href="/" className="group flex items-center gap-3">
+        <Link
+          href="/"
+          className="group flex items-center gap-3"
+        >
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white font-black text-black transition-transform duration-300 group-hover:rotate-6">
             F
           </div>
+
           <span className="text-lg font-bold tracking-tight">
             Forge
           </span>
