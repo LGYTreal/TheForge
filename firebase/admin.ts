@@ -1,5 +1,6 @@
 import {
   get,
+  push,
   ref,
   remove,
   set,
@@ -29,6 +30,7 @@ export interface AdminProject {
   memberCount?: number;
   createdAt?: number;
   updatedAt?: number;
+  hidden?: boolean;
 }
 
 export interface AdminUser {
@@ -41,6 +43,8 @@ export interface AdminUser {
   banner?: string;
   skills?: string[];
   createdAt?: number;
+  canPublish?: boolean;
+  canFollow?: boolean;
 }
 
 export interface AdminReport {
@@ -54,6 +58,7 @@ export interface AdminReport {
   resolvedBy?: string;
   resolvedAt?: number;
   createdAt: number;
+  adminNote?: string;
 }
 
 export interface UserBan {
@@ -65,9 +70,19 @@ export interface UserBan {
   permanent: boolean;
 }
 
+export interface ModerationLog {
+  id: string;
+  action: string;
+  adminUid: string;
+  targetType: "user" | "project" | "report" | "system";
+  targetId: string;
+  targetName?: string;
+  details?: string;
+  createdAt: number;
+}
+
 export async function isAdmin(uid: string) {
   const snapshot = await get(ref(database, `admins/${uid}`));
-
   return snapshot.exists() && snapshot.val() === true;
 }
 
@@ -99,7 +114,12 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
     .map(([uid, user]) => ({
       uid,
       ...(user as Omit<AdminUser, "uid">),
-    }));
+    }))
+    .sort((a, b) =>
+      (a.displayName || a.username || "").localeCompare(
+        b.displayName || b.username || ""
+      )
+    );
 }
 
 export async function getAdminReports(): Promise<AdminReport[]> {
@@ -118,20 +138,58 @@ export async function getAdminReports(): Promise<AdminReport[]> {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+export async function getAllBans(): Promise<UserBan[]> {
+  const snapshot = await get(ref(database, "bans"));
+
+  if (!snapshot.exists()) {
+    return [];
+  }
+
+  return Object.entries(snapshot.val())
+    .filter(([, ban]) => ban && typeof ban === "object")
+    .map(([uid, ban]) => ({
+      uid,
+      ...(ban as Omit<UserBan, "uid">),
+    }));
+}
+
+export async function getAdminIds(): Promise<string[]> {
+  const snapshot = await get(ref(database, "admins"));
+
+  if (!snapshot.exists()) {
+    return [];
+  }
+
+  return Object.entries(snapshot.val())
+    .filter(([, value]) => value === true)
+    .map(([uid]) => uid);
+}
+
 export async function updateReportStatus(
   reportId: string,
   status: "resolved" | "denied",
-  adminUid: string
+  adminUid: string,
+  adminNote?: string
 ) {
   await update(ref(database, `reports/${reportId}`), {
     status,
     resolvedBy: adminUid,
     resolvedAt: Date.now(),
+    ...(adminNote !== undefined ? { adminNote } : {}),
   });
 }
 
 export async function deleteAdminProject(projectId: string) {
   await remove(ref(database, `projects/${projectId}`));
+}
+
+export async function setProjectHidden(
+  projectId: string,
+  hidden: boolean
+) {
+  await update(ref(database, `projects/${projectId}`), {
+    hidden,
+  });
 }
 
 export async function createBan(
@@ -162,7 +220,6 @@ export async function createBan(
   };
 
   await set(ref(database, `bans/${uid}`), ban);
-
   return ban;
 }
 
@@ -170,30 +227,72 @@ export async function removeBan(uid: string) {
   await remove(ref(database, `bans/${uid}`));
 }
 
-export async function getAllBans(): Promise<UserBan[]> {
-  const snapshot = await get(ref(database, "bans"));
+export async function setUserRestriction(
+  uid: string,
+  field: "canPublish" | "canFollow",
+  value: boolean
+) {
+  await update(ref(database, `users/${uid}`), {
+    [field]: value,
+  });
+}
+
+export async function setAdminStatus(
+  uid: string,
+  value: boolean
+) {
+  if (value) {
+    await set(ref(database, `admins/${uid}`), true);
+  } else {
+    await remove(ref(database, `admins/${uid}`));
+  }
+}
+
+export async function deleteAdminUser(
+  uid: string,
+  projectIds: string[]
+) {
+  const updates: Record<string, null> = {
+    [`users/${uid}`]: null,
+    [`bans/${uid}`]: null,
+    [`followers/${uid}`]: null,
+    [`following/${uid}`]: null,
+    [`notifications/${uid}`]: null,
+    [`blockedUsers/${uid}`]: null,
+  };
+
+  for (const projectId of projectIds) {
+    updates[`projects/${projectId}`] = null;
+  }
+
+  await update(ref(database), updates);
+}
+
+export async function createModerationLog(
+  log: Omit<ModerationLog, "id">
+) {
+  const logRef = push(ref(database, "moderationLogs"));
+
+  await set(logRef, {
+    id: logRef.key,
+    ...log,
+  });
+
+  return logRef.key;
+}
+
+export async function getModerationLogs(): Promise<ModerationLog[]> {
+  const snapshot = await get(ref(database, "moderationLogs"));
 
   if (!snapshot.exists()) {
     return [];
   }
 
   return Object.entries(snapshot.val())
-    .filter(([, ban]) => ban && typeof ban === "object")
-    .map(([uid, ban]) => ({
-      uid,
-      ...(ban as Omit<UserBan, "uid">),
-    }));
-}
-
-export async function getUserBan(uid: string): Promise<UserBan | null> {
-  const snapshot = await get(ref(database, `bans/${uid}`));
-
-  if (!snapshot.exists()) {
-    return null;
-  }
-
-  return {
-    uid,
-    ...(snapshot.val() as Omit<UserBan, "uid">),
-  };
+    .filter(([, log]) => log && typeof log === "object")
+    .map(([id, log]) => ({
+      id,
+      ...(log as Omit<ModerationLog, "id">),
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt);
 }

@@ -2,28 +2,30 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  onAuthStateChanged,
-  User,
-} from "firebase/auth";
-import { ref, onValue } from "firebase/database";
-
+import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@/firebase/auth";
-import { database } from "@/firebase/database";
 import {
+  AdminProject,
+  AdminReport,
+  AdminUser,
+  ModerationLog,
+  UserBan,
   createBan,
+  createModerationLog,
   deleteAdminProject,
+  deleteAdminUser,
+  getAdminIds,
   getAdminProjects,
   getAdminReports,
   getAdminUsers,
   getAllBans,
+  getModerationLogs,
   isAdmin,
   removeBan,
+  setAdminStatus,
+  setProjectHidden,
+  setUserRestriction,
   updateReportStatus,
-  AdminProject,
-  AdminReport,
-  AdminUser,
-  UserBan,
 } from "@/firebase/admin";
 import { createNotification } from "@/firebase/notifications";
 
@@ -32,7 +34,8 @@ type Section =
   | "projects"
   | "reports"
   | "users"
-  | "bans";
+  | "bans"
+  | "logs";
 
 const durations = [
   { label: "1 hour", value: 60 * 60 * 1000 },
@@ -52,22 +55,26 @@ export default function AdminPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [bans, setBans] = useState<UserBan[]>([]);
-
+  const [logs, setLogs] = useState<ModerationLog[]>([]);
+  const [adminIds, setAdminIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
 
-  const [deleteProject, setDeleteProject] =
-    useState<AdminProject | null>(null);
+  const [deleteProject, setDeleteProject] = useState<AdminProject | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deleting, setDeleting] = useState(false);
 
   const [banUser, setBanUser] = useState<AdminUser | null>(null);
-  const [banDuration, setBanDuration] = useState(
-  String(24 * 60 * 60 * 1000)
-);
-
+  const [banDuration, setBanDuration] = useState(String(24 * 60 * 60 * 1000));
   const [banReason, setBanReason] = useState("");
   const [banning, setBanning] = useState(false);
+
+  const [deleteUser, setDeleteUser] = useState<AdminUser | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
+
+  const [reportFilter, setReportFilter] = useState<"all" | "open" | "resolved" | "denied">("all");
+  const [reportNote, setReportNote] = useState("");
+  const [reportTarget, setReportTarget] = useState<AdminReport | null>(null);
 
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
@@ -83,8 +90,7 @@ export default function AdminPage() {
       }
 
       try {
-        const admin = await isAdmin(currentUser.uid);
-        setAuthorized(admin);
+        setAuthorized(await isAdmin(currentUser.uid));
       } catch {
         setAuthorized(false);
       }
@@ -100,26 +106,24 @@ export default function AdminPage() {
 
     async function load() {
       try {
-        const [
-          projectData,
-          userData,
-          reportData,
-          banData,
-        ] = await Promise.all([
-          getAdminProjects(),
-          getAdminUsers(),
-          getAdminReports(),
-          getAllBans(),
-        ]);
+        const [projectData, userData, reportData, banData, logData, admins] =
+          await Promise.all([
+            getAdminProjects(),
+            getAdminUsers(),
+            getAdminReports(),
+            getAllBans(),
+            getModerationLogs(),
+            getAdminIds(),
+          ]);
 
         setProjects(projectData);
         setUsers(userData);
         setReports(reportData);
         setBans(banData);
+        setLogs(logData);
+        setAdminIds(admins);
       } catch (error: any) {
-        setActionError(
-          error?.message || "Unable to load moderation data."
-        );
+        flashError(error?.message || "Unable to load moderation data.");
       }
     }
 
@@ -129,27 +133,18 @@ export default function AdminPage() {
   function flashSuccess(message: string) {
     setActionError("");
     setActionSuccess(message);
-
-    window.setTimeout(() => {
-      setActionSuccess("");
-    }, 4000);
+    window.setTimeout(() => setActionSuccess(""), 4000);
   }
 
   function flashError(message: string) {
     setActionSuccess("");
     setActionError(message);
-
-    window.setTimeout(() => {
-      setActionError("");
-    }, 5000);
+    window.setTimeout(() => setActionError(""), 5000);
   }
 
   const filteredProjects = useMemo(() => {
     const query = search.trim().toLowerCase();
-
-    if (!query) {
-      return projects;
-    }
+    if (!query) return projects;
 
     return projects.filter((project) =>
       [
@@ -167,18 +162,10 @@ export default function AdminPage() {
 
   const filteredUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
+    if (!query) return users;
 
-    if (!query) {
-      return users;
-    }
-
-    return users.filter((userItem) =>
-      [
-        userItem.username,
-        userItem.displayName,
-        userItem.email,
-        userItem.uid,
-      ]
+    return users.filter((item) =>
+      [item.username, item.displayName, item.email, item.uid]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -189,25 +176,28 @@ export default function AdminPage() {
   const filteredReports = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    if (!query) {
-      return reports;
-    }
+    return reports.filter((report) => {
+      const status = report.status || "open";
+      const matchesFilter =
+        reportFilter === "all" || status === reportFilter;
 
-    return reports.filter((report) =>
-      [
+      if (!matchesFilter) return false;
+      if (!query) return true;
+
+      return [
         report.reason,
         report.details,
         report.targetId,
         report.reporterId,
         report.targetType,
-        report.status,
+        status,
       ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
-        .includes(query)
-    );
-  }, [reports, search]);
+        .includes(query);
+    });
+  }, [reports, search, reportFilter]);
 
   const openReports = reports.filter(
     (report) => !report.status || report.status === "open"
@@ -220,37 +210,52 @@ export default function AdminPage() {
       ban.bannedUntil > Date.now()
   );
 
+  const hiddenProjects = projects.filter((project) => project.hidden);
+
   function getUser(uid: string) {
     return users.find((item) => item.uid === uid);
   }
 
   function formatDate(timestamp?: number) {
-    if (!timestamp) {
-      return "Unknown";
-    }
-
-    return new Date(timestamp).toLocaleString();
+    return timestamp ? new Date(timestamp).toLocaleString() : "Unknown";
   }
 
   function formatBan(ban: UserBan) {
-    if (ban.permanent) {
-      return "Permanent";
-    }
-
-    if (!ban.bannedUntil) {
-      return "Unknown";
-    }
-
+    if (ban.permanent) return "Permanent";
+    if (!ban.bannedUntil) return "Unknown";
     return `Until ${formatDate(ban.bannedUntil)}`;
   }
 
+  async function logAction(
+    action: string,
+    targetType: ModerationLog["targetType"],
+    targetId: string,
+    targetName?: string,
+    details?: string
+  ) {
+    if (!user) return;
+
+    const log: Omit<ModerationLog, "id"> = {
+      action,
+      adminUid: user.uid,
+      targetType,
+      targetId,
+      targetName,
+      details,
+      createdAt: Date.now(),
+    };
+
+    await createModerationLog(log);
+    setLogs((current) => [
+      { id: `${Date.now()}-${Math.random()}`, ...log },
+      ...current,
+    ]);
+  }
+
   async function handleDeleteProject() {
-    if (!deleteProject || !user) {
-      return;
-    }
+    if (!deleteProject || !user) return;
 
     const reason = deleteReason.trim();
-
     if (!reason) {
       flashError("A deletion reason is required.");
       return;
@@ -271,90 +276,124 @@ export default function AdminPage() {
         createdAt: Date.now(),
       });
 
-      setProjects((current) =>
-        current.filter(
-          (project) => project.id !== deleteProject.id
-        )
+      await logAction(
+        "Deleted project",
+        "project",
+        deleteProject.id,
+        deleteProject.name,
+        reason
       );
 
+      setProjects((current) =>
+        current.filter((project) => project.id !== deleteProject.id)
+      );
       setDeleteProject(null);
       setDeleteReason("");
-
       flashSuccess("Project deleted and creator notified.");
     } catch (error: any) {
-      flashError(
-        error?.message || "Unable to delete the project."
-      );
+      flashError(error?.message || "Unable to delete the project.");
     } finally {
       setDeleting(false);
     }
   }
 
+  async function handleProjectVisibility(project: AdminProject) {
+    try {
+      const nextHidden = !project.hidden;
+
+      await setProjectHidden(project.id, nextHidden);
+
+      await logAction(
+        nextHidden ? "Hid project" : "Unhid project",
+        "project",
+        project.id,
+        project.name
+      );
+
+      setProjects((current) =>
+        current.map((item) =>
+          item.id === project.id
+            ? { ...item, hidden: nextHidden }
+            : item
+        )
+      );
+
+      flashSuccess(nextHidden ? "Project hidden." : "Project visible again.");
+    } catch (error: any) {
+      flashError(error?.message || "Unable to change project visibility.");
+    }
+  }
+
   async function handleReportStatus(
-  report: AdminReport,
-  status: "resolved" | "denied"
-) {
-  if (!user) {
-    return;
-  }
+    report: AdminReport,
+    status: "resolved" | "denied"
+  ) {
+    if (!user) return;
 
-  try {
-    await updateReportStatus(
-      report.id,
-      status,
-      user.uid
-    );
+    try {
+      const note = reportNote.trim();
 
-    await createNotification(report.reporterId, {
-      type: "moderation",
-      title:
+      await updateReportStatus(report.id, status, user.uid, note);
+
+      await createNotification(report.reporterId, {
+        type: "moderation",
+        title: status === "resolved" ? "Report resolved" : "Report denied",
+        message:
+          status === "resolved"
+            ? "Your report has been reviewed and resolved by a Forge administrator."
+            : "Your report has been reviewed and denied by a Forge administrator.",
+        actorId: user.uid,
+        targetId: report.id,
+        reportId: report.id,
+        read: false,
+        createdAt: Date.now(),
+      });
+
+      await logAction(
+        status === "resolved" ? "Resolved report" : "Denied report",
+        "report",
+        report.id,
+        report.reason,
+        note || undefined
+      );
+
+      setReports((current) =>
+        current.map((item) =>
+          item.id === report.id
+            ? {
+                ...item,
+                status,
+                resolvedBy: user.uid,
+                resolvedAt: Date.now(),
+                adminNote: note || item.adminNote,
+              }
+            : item
+        )
+      );
+
+      setReportTarget(null);
+      setReportNote("");
+      flashSuccess(
         status === "resolved"
-          ? "Report resolved"
-          : "Report denied",
-      message:
-        status === "resolved"
-          ? "Your report has been reviewed and resolved by a Forge administrator."
-          : "Your report has been reviewed and denied by a Forge administrator.",
-      actorId: user.uid,
-      targetId: report.id,
-      read: false,
-      createdAt: Date.now(),
-    });
-
-    setReports((current) =>
-      current.map((item) =>
-        item.id === report.id
-          ? {
-              ...item,
-              status,
-              resolvedBy: user.uid,
-              resolvedAt: Date.now(),
-            }
-          : item
-      )
-    );
-
-    flashSuccess(
-      status === "resolved"
-        ? "Report marked as resolved."
-        : "Report denied."
-    );
-  } catch (error: any) {
-    flashError(
-      error?.message || "Unable to update report."
-    );
+          ? "Report marked as resolved."
+          : "Report denied."
+      );
+    } catch (error: any) {
+      flashError(error?.message || "Unable to update report.");
+    }
   }
-}
 
   async function handleBan() {
-    if (!banUser || !user) {
+    if (!banUser || !user) return;
+
+    const reason = banReason.trim();
+    if (!reason) {
+      flashError("A ban reason is required.");
       return;
     }
 
-    const reason = banReason.trim();
-
-    if (!reason) {
-      flashError("A ban reason is required.");
+    if (banUser.uid === user.uid) {
+      flashError("You cannot ban yourself.");
       return;
     }
 
@@ -365,8 +404,7 @@ export default function AdminPage() {
 
       if (banDuration !== "permanent") {
         const duration = durations.find(
-          (item) =>
-            item.value.toString() === banDuration
+          (item) => item.value.toString() === banDuration
         );
 
         if (duration) {
@@ -381,22 +419,25 @@ export default function AdminPage() {
         user.uid
       );
 
+      await logAction(
+        "Banned user",
+        "user",
+        banUser.uid,
+        banUser.displayName || banUser.username,
+        reason
+      );
+
       setBans((current) => [
-        ...current.filter(
-          (item) => item.uid !== banUser.uid
-        ),
+        ...current.filter((item) => item.uid !== banUser.uid),
         ban,
       ]);
 
       setBanUser(null);
       setBanReason("");
       setBanDuration("86400000");
-
       flashSuccess("User banned.");
     } catch (error: any) {
-      flashError(
-        error?.message || "Unable to ban this user."
-      );
+      flashError(error?.message || "Unable to ban this user.");
     } finally {
       setBanning(false);
     }
@@ -405,16 +446,131 @@ export default function AdminPage() {
   async function handleUnban(uid: string) {
     try {
       await removeBan(uid);
+      await logAction("Unbanned user", "user", uid, getUser(uid)?.displayName);
 
-      setBans((current) =>
-        current.filter((ban) => ban.uid !== uid)
-      );
-
+      setBans((current) => current.filter((ban) => ban.uid !== uid));
       flashSuccess("User unbanned.");
     } catch (error: any) {
-      flashError(
-        error?.message || "Unable to remove the ban."
+      flashError(error?.message || "Unable to remove the ban.");
+    }
+  }
+
+  async function handleRestriction(
+    userItem: AdminUser,
+    field: "canPublish" | "canFollow"
+  ) {
+    const currentValue = userItem[field] !== false;
+    const nextValue = !currentValue;
+
+    try {
+      await setUserRestriction(userItem.uid, field, nextValue);
+
+      await logAction(
+        nextValue
+          ? `Restored ${field === "canPublish" ? "publishing" : "following"}`
+          : `Disabled ${field === "canPublish" ? "publishing" : "following"}`,
+        "user",
+        userItem.uid,
+        userItem.displayName || userItem.username
       );
+
+      setUsers((current) =>
+        current.map((item) =>
+          item.uid === userItem.uid
+            ? { ...item, [field]: nextValue }
+            : item
+        )
+      );
+
+      flashSuccess(
+        nextValue
+          ? "Permission restored."
+          : "Permission disabled."
+      );
+    } catch (error: any) {
+      flashError(error?.message || "Unable to update user permissions.");
+    }
+  }
+
+  async function handleAdminStatus(userItem: AdminUser) {
+    if (!user) return;
+
+    if (userItem.uid === user.uid) {
+      flashError("You cannot change your own administrator status.");
+      return;
+    }
+
+    const currentlyAdmin = adminIds.includes(userItem.uid);
+
+    try {
+      await setAdminStatus(userItem.uid, !currentlyAdmin);
+
+      await logAction(
+        currentlyAdmin ? "Removed administrator" : "Granted administrator",
+        "user",
+        userItem.uid,
+        userItem.displayName || userItem.username
+      );
+
+      setAdminIds((current) =>
+        currentlyAdmin
+          ? current.filter((uid) => uid !== userItem.uid)
+          : [...current, userItem.uid]
+      );
+
+      flashSuccess(
+        currentlyAdmin
+          ? "Administrator access removed."
+          : "Administrator access granted."
+      );
+    } catch (error: any) {
+      flashError(error?.message || "Unable to change administrator status.");
+    }
+  }
+
+  async function handleDeleteUser() {
+    if (!deleteUser || !user) return;
+
+    if (deleteUser.uid === user.uid) {
+      flashError("You cannot delete your own account from the admin panel.");
+      return;
+    }
+
+    setDeletingUser(true);
+
+    try {
+      const ownedProjects = projects
+        .filter((project) => project.ownerId === deleteUser.uid)
+        .map((project) => project.id);
+
+      await deleteAdminUser(deleteUser.uid, ownedProjects);
+
+      await logAction(
+        "Deleted user data",
+        "user",
+        deleteUser.uid,
+        deleteUser.displayName || deleteUser.username,
+        `Removed profile data and ${ownedProjects.length} owned project(s).`
+      );
+
+      setUsers((current) =>
+        current.filter((item) => item.uid !== deleteUser.uid)
+      );
+      setProjects((current) =>
+        current.filter((project) => project.ownerId !== deleteUser.uid)
+      );
+      setBans((current) =>
+        current.filter((ban) => ban.uid !== deleteUser.uid)
+      );
+      setDeleteUser(null);
+
+      flashSuccess(
+        "User profile data and owned projects were deleted."
+      );
+    } catch (error: any) {
+      flashError(error?.message || "Unable to delete user data.");
+    } finally {
+      setDeletingUser(false);
     }
   }
 
@@ -431,31 +587,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!user) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-[#050505] px-6 text-white">
-        <div className="forge-scale max-w-md text-center">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl border border-red-400/20 bg-red-400/10 text-3xl">
-            !
-          </div>
-          <p className="mt-8 text-sm font-medium uppercase tracking-widest text-red-400">
-            ACCESS DENIED
-          </p>
-          <h1 className="mt-3 text-4xl font-black">
-            Sign in required.
-          </h1>
-          <Link
-            href="/login"
-            className="forge-button mt-8 inline-flex rounded-2xl bg-white px-6 py-3.5 font-semibold text-black"
-          >
-            Sign in
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  if (!authorized) {
+  if (!user || !authorized) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#050505] px-6 text-white">
         <div className="forge-scale max-w-lg text-center">
@@ -469,14 +601,13 @@ export default function AdminPage() {
             You don't have access.
           </h1>
           <p className="mt-4 leading-7 text-zinc-500">
-            This area is restricted to authorized Forge
-            administrators.
+            This area is restricted to authorized Forge administrators.
           </p>
           <Link
-            href="/"
-            className="forge-button mt-8 inline-flex rounded-2xl border border-white/10 bg-white/[0.05] px-6 py-3.5 font-semibold text-white"
+            href={user ? "/" : "/login"}
+            className="forge-button mt-8 inline-flex rounded-2xl bg-white px-6 py-3.5 font-semibold text-black"
           >
-            Return home
+            {user ? "Return home" : "Sign in"}
           </Link>
         </div>
       </main>
@@ -495,16 +626,18 @@ export default function AdminPage() {
           <p className="text-sm font-medium uppercase tracking-[0.3em] text-violet-400">
             FORGE ADMIN
           </p>
+
           <div className="mt-3 flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
             <div>
               <h1 className="text-4xl font-black tracking-tight sm:text-6xl">
                 Command Center
               </h1>
               <p className="mt-4 max-w-2xl text-zinc-500">
-                Manage projects, reports, users, and
-                moderation from one place.
+                Manage projects, users, reports, permissions, bans,
+                administrators, and moderation history.
               </p>
             </div>
+
             <Link
               href="/"
               className="forge-button inline-flex w-fit rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-zinc-300 hover:bg-white/[0.08] hover:text-white"
@@ -526,13 +659,14 @@ export default function AdminPage() {
           </div>
         )}
 
-        <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {[
             ["Overview", "overview"],
             ["Projects", "projects"],
             ["Reports", "reports"],
             ["Users", "users"],
             ["Bans", "bans"],
+            ["Logs", "logs"],
           ].map(([label, value]) => (
             <button
               key={value}
@@ -547,9 +681,7 @@ export default function AdminPage() {
                   : "border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.06] hover:text-white"
               }`}
             >
-              <span className="text-sm font-semibold">
-                {label}
-              </span>
+              <span className="text-sm font-semibold">{label}</span>
             </button>
           ))}
         </div>
@@ -557,65 +689,64 @@ export default function AdminPage() {
         {section === "overview" && (
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              [
-                "Projects",
-                projects.length,
-                "Total projects",
-              ],
-              [
-                "Open reports",
-                openReports.length,
-                "Need attention",
-              ],
-              [
-                "Users",
-                users.length,
-                "Registered users",
-              ],
-              [
-                "Active bans",
-                activeBans.length,
-                "Currently banned",
-              ],
+              ["Projects", projects.length, "Total projects"],
+              ["Hidden projects", hiddenProjects.length, "Moderated visibility"],
+              ["Open reports", openReports.length, "Need attention"],
+              ["Users", users.length, "Registered users"],
+              ["Active bans", activeBans.length, "Currently banned"],
+              ["Admins", adminIds.length, "Authorized administrators"],
+              ["Logs", logs.length, "Moderation actions"],
+              ["Resolved reports", reports.filter((r) => r.status === "resolved").length, "Resolved"],
             ].map(([title, value, subtitle]) => (
               <div
                 key={title}
                 className="forge-card forge-stagger-2 rounded-3xl border border-white/10 bg-white/[0.025] p-6"
               >
-                <p className="text-sm text-zinc-500">
-                  {title}
-                </p>
-                <p className="mt-3 text-4xl font-black">
-                  {value}
-                </p>
-                <p className="mt-2 text-xs text-zinc-600">
-                  {subtitle}
-                </p>
+                <p className="text-sm text-zinc-500">{title}</p>
+                <p className="mt-3 text-4xl font-black">{value}</p>
+                <p className="mt-2 text-xs text-zinc-600">{subtitle}</p>
               </div>
             ))}
           </div>
         )}
 
         {section !== "overview" && (
-          <div className="mt-8">
-            <div className="relative">
-              <input
-                value={search}
-                onChange={(event) =>
-                  setSearch(event.target.value)
-                }
-                placeholder={
-                  section === "projects"
-                    ? "Search projects, creators, categories, tags..."
-                    : section === "reports"
-                      ? "Search reports..."
-                      : section === "users"
-                        ? "Search users..."
-                        : "Search bans..."
-                }
-                className="w-full rounded-2xl border border-white/10 bg-white/[0.035] px-5 py-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-violet-400/40"
-              />
-            </div>
+          <div className="mt-8 space-y-4">
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder={
+                section === "projects"
+                  ? "Search projects, creators, categories, tags..."
+                  : section === "reports"
+                    ? "Search reports..."
+                    : section === "users"
+                      ? "Search users..."
+                      : section === "bans"
+                        ? "Search bans..."
+                        : "Search moderation logs..."
+              }
+              className="w-full rounded-2xl border border-white/10 bg-white/[0.035] px-5 py-4 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-violet-400/40"
+            />
+
+            {section === "reports" && (
+              <div className="flex flex-wrap gap-2">
+                {(["all", "open", "resolved", "denied"] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setReportFilter(filter)}
+                    className={`rounded-xl border px-4 py-2 text-xs font-semibold uppercase ${
+                      reportFilter === filter
+                        ? "border-violet-400/30 bg-violet-400/10 text-violet-300"
+                        : "border-white/10 bg-white/[0.03] text-zinc-500"
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -635,6 +766,11 @@ export default function AdminPage() {
                         <span className="rounded-lg bg-violet-400/10 px-2.5 py-1 text-xs text-violet-300">
                           {project.category}
                         </span>
+                        {project.hidden && (
+                          <span className="rounded-lg bg-red-400/10 px-2.5 py-1 text-xs text-red-300">
+                            Hidden
+                          </span>
+                        )}
                         <span className="text-xs text-zinc-600">
                           {formatDate(project.createdAt)}
                         </span>
@@ -658,20 +794,29 @@ export default function AdminPage() {
                       </p>
                     </div>
 
-                    <div className="flex shrink-0 gap-2">
+                    <div className="flex flex-wrap shrink-0 gap-2">
                       <Link
                         href={`/projects/${project.id}`}
                         className="forge-button rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-300 hover:bg-white/[0.08] hover:text-white"
                       >
                         View
                       </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => handleProjectVisibility(project)}
+                        className="forge-button rounded-xl border border-amber-400/20 bg-amber-400/10 px-4 py-2.5 text-sm text-amber-300"
+                      >
+                        {project.hidden ? "Unhide" : "Hide"}
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => {
                           setDeleteProject(project);
                           setDeleteReason("");
                         }}
-                        className="forge-button rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-300 hover:bg-red-500/15"
+                        className="forge-button rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-300"
                       >
                         Delete
                       </button>
@@ -709,27 +854,16 @@ export default function AdminPage() {
                         <span className="rounded-lg bg-red-400/10 px-2.5 py-1 text-xs font-medium uppercase text-red-300">
                           {report.reason}
                         </span>
-
                         <span className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-xs text-zinc-500">
                           {report.targetType}
                         </span>
-
-                        <span
-                          className={`rounded-lg px-2.5 py-1 text-xs ${
-                            report.status === "resolved"
-                              ? "bg-emerald-400/10 text-emerald-300"
-                              : report.status === "denied"
-                                ? "bg-zinc-400/10 text-zinc-400"
-                                : "bg-amber-400/10 text-amber-300"
-                          }`}
-                        >
+                        <span className="rounded-lg bg-amber-400/10 px-2.5 py-1 text-xs text-amber-300">
                           {report.status || "open"}
                         </span>
                       </div>
 
                       <p className="mt-4 text-sm leading-7 text-zinc-400">
-                        {report.details ||
-                          "No additional details provided."}
+                        {report.details || "No additional details provided."}
                       </p>
 
                       <div className="mt-4 space-y-1 text-xs text-zinc-600">
@@ -749,39 +883,26 @@ export default function AdminPage() {
                               report.targetId}
                           </span>
                         </p>
-                        <p>
-                          Submitted:{" "}
-                          {formatDate(report.createdAt)}
-                        </p>
+                        <p>Submitted: {formatDate(report.createdAt)}</p>
+                        {report.adminNote && (
+                          <p className="text-zinc-500">
+                            Admin note: {report.adminNote}
+                          </p>
+                        )}
                       </div>
                     </div>
 
-                    {(!report.status ||
-                      report.status === "open") && (
+                    {(!report.status || report.status === "open") && (
                       <div className="flex shrink-0 gap-2 lg:self-start">
                         <button
                           type="button"
-                          onClick={() =>
-                            handleReportStatus(
-                              report,
-                              "resolved"
-                            )
-                          }
-                          className="forge-button rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-300 hover:bg-emerald-400/15"
+                          onClick={() => {
+                            setReportTarget(report);
+                            setReportNote(report.adminNote || "");
+                          }}
+                          className="forge-button rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-300"
                         >
-                          Resolve
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleReportStatus(
-                              report,
-                              "denied"
-                            )
-                          }
-                          className="forge-button rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-400 hover:bg-white/[0.08] hover:text-white"
-                        >
-                          Deny
+                          Review
                         </button>
                       </div>
                     )}
@@ -801,84 +922,170 @@ export default function AdminPage() {
         {section === "users" && (
           <div className="mt-5 space-y-3">
             {filteredUsers.map((userItem) => {
-              const ban = bans.find(
-                (item) => item.uid === userItem.uid
-              );
+              const ban = bans.find((item) => item.uid === userItem.uid);
+              const isBanned =
+                !!ban &&
+                (ban.permanent ||
+                  !ban.bannedUntil ||
+                  ban.bannedUntil > Date.now());
+              const isAdminUser = adminIds.includes(userItem.uid);
 
               return (
                 <div
                   key={userItem.uid}
                   className="forge-card rounded-3xl border border-white/10 bg-white/[0.025] p-5"
                 >
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="flex min-w-0 items-center gap-4">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
-                        {userItem.avatar ? (
-                          <img
-                            src={userItem.avatar}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
+                  <div className="flex flex-col gap-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04]">
+                          {userItem.avatar ? (
+                            <img
+                              src={userItem.avatar}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="font-bold text-zinc-500">
+                              {(userItem.displayName ||
+                                userItem.username ||
+                                "?")[0].toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate font-semibold">
+                              {userItem.displayName ||
+                                userItem.username ||
+                                "Unnamed user"}
+                            </p>
+                            {isAdminUser && (
+                              <span className="rounded-lg bg-violet-400/10 px-2 py-1 text-[10px] font-bold uppercase text-violet-300">
+                                Admin
+                              </span>
+                            )}
+                            {isBanned && (
+                              <span className="rounded-lg bg-red-400/10 px-2 py-1 text-[10px] font-bold uppercase text-red-300">
+                                Banned
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="truncate text-sm text-zinc-500">
+                            @{userItem.username || "unknown"}
+                          </p>
+                          <p className="mt-1 truncate text-xs text-zinc-600">
+                            {userItem.email || userItem.uid}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Link
+                          href={`/profile?uid=${userItem.uid}`}
+                          className="forge-button rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-400"
+                        >
+                          Profile
+                        </Link>
+
+                        {isBanned ? (
+                          <button
+                            type="button"
+                            onClick={() => handleUnban(userItem.uid)}
+                            className="forge-button rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-300"
+                          >
+                            Unban
+                          </button>
                         ) : (
-                          <span className="font-bold text-zinc-500">
-                            {(userItem.displayName ||
-                              userItem.username ||
-                              "?")[0].toUpperCase()}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setBanUser(userItem);
+                              setBanReason("");
+                              setBanDuration("86400000");
+                            }}
+                            className="forge-button rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-300"
+                          >
+                            Ban
+                          </button>
                         )}
-                      </div>
 
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold">
-                          {userItem.displayName ||
-                            userItem.username ||
-                            "Unnamed user"}
-                        </p>
-                        <p className="truncate text-sm text-zinc-500">
-                          @{userItem.username || "unknown"}
-                        </p>
-                        <p className="mt-1 truncate text-xs text-zinc-600">
-                          {userItem.uid}
-                        </p>
-                      </div>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAdminStatus(userItem)}
+                          className="forge-button rounded-xl border border-violet-400/20 bg-violet-400/10 px-4 py-2.5 text-sm text-violet-300"
+                        >
+                          {isAdminUser ? "Remove admin" : "Make admin"}
+                        </button>
 
-                    <div className="flex shrink-0 gap-2">
-                      {ban &&
-                      (ban.permanent ||
-                        !ban.bannedUntil ||
-                        ban.bannedUntil > Date.now()) ? (
                         <button
                           type="button"
                           onClick={() =>
-                            handleUnban(userItem.uid)
+                            handleRestriction(userItem, "canPublish")
                           }
-                          className="forge-button rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-300 hover:bg-emerald-400/15"
+                          className="forge-button rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-300"
                         >
-                          Unban
+                          {userItem.canPublish === false
+                            ? "Allow publishing"
+                            : "Disable publishing"}
                         </button>
-                      ) : (
+
                         <button
                           type="button"
-                          onClick={() => {
-                            setBanUser(userItem);
-                            setBanReason("");
-                            setBanDuration(
-                              "86400000"
-                            );
-                          }}
-                          className="forge-button rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-300 hover:bg-red-500/15"
+                          onClick={() =>
+                            handleRestriction(userItem, "canFollow")
+                          }
+                          className="forge-button rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-300"
                         >
-                          Ban
+                          {userItem.canFollow === false
+                            ? "Allow following"
+                            : "Disable following"}
                         </button>
-                      )}
 
-                      <Link
-                        href={`/profile/${userItem.uid}`}
-                        className="forge-button rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm text-zinc-400 hover:bg-white/[0.08] hover:text-white"
-                      >
-                        Profile
-                      </Link>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteUser(userItem)}
+                          className="forge-button rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-300"
+                        >
+                          Delete data
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                        <p className="text-xs text-zinc-600">Publishing</p>
+                        <p className="mt-2 text-sm font-semibold">
+                          {userItem.canPublish === false
+                            ? "Disabled"
+                            : "Allowed"}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                        <p className="text-xs text-zinc-600">Following</p>
+                        <p className="mt-2 text-sm font-semibold">
+                          {userItem.canFollow === false
+                            ? "Disabled"
+                            : "Allowed"}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                        <p className="text-xs text-zinc-600">Created</p>
+                        <p className="mt-2 text-sm font-semibold">
+                          {formatDate(userItem.createdAt)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                        <p className="text-xs text-zinc-600">UID</p>
+                        <p className="mt-2 truncate text-xs font-mono text-zinc-400">
+                          {userItem.uid}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -900,9 +1107,7 @@ export default function AdminPage() {
                 const target = getUser(ban.uid);
                 const query = search.trim().toLowerCase();
 
-                if (!query) {
-                  return true;
-                }
+                if (!query) return true;
 
                 return [
                   ban.uid,
@@ -945,7 +1150,7 @@ export default function AdminPage() {
                       <button
                         type="button"
                         onClick={() => handleUnban(ban.uid)}
-                        className="forge-button rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-300 hover:bg-emerald-400/15"
+                        className="forge-button rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-300"
                       >
                         Unban
                       </button>
@@ -961,7 +1166,129 @@ export default function AdminPage() {
             )}
           </div>
         )}
+
+        {section === "logs" && (
+          <div className="mt-5 space-y-3">
+            {logs
+              .filter((log) => {
+                const query = search.trim().toLowerCase();
+                if (!query) return true;
+
+                return [
+                  log.action,
+                  log.targetType,
+                  log.targetId,
+                  log.targetName,
+                  log.details,
+                  log.adminUid,
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+                  .toLowerCase()
+                  .includes(query);
+              })
+              .map((log) => (
+                <div
+                  key={log.id}
+                  className="forge-card rounded-3xl border border-white/10 bg-white/[0.025] p-5"
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-lg bg-violet-400/10 px-2.5 py-1 text-xs font-medium text-violet-300">
+                          {log.action}
+                        </span>
+                        <span className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-xs text-zinc-500">
+                          {log.targetType}
+                        </span>
+                      </div>
+
+                      <p className="mt-3 text-sm text-zinc-400">
+                        {log.targetName || log.targetId}
+                      </p>
+
+                      {log.details && (
+                        <p className="mt-2 text-sm leading-6 text-zinc-600">
+                          {log.details}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="text-xs text-zinc-600 lg:text-right">
+                      <p>{formatDate(log.createdAt)}</p>
+                      <p className="mt-1 font-mono">{log.adminUid}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+            {logs.length === 0 && (
+              <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-12 text-center text-zinc-600">
+                No moderation actions recorded yet.
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {reportTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-6 backdrop-blur-md">
+          <div className="forge-scale w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b0b0b] p-6 shadow-2xl">
+            <p className="text-xs font-medium uppercase tracking-widest text-violet-400">
+              REVIEW REPORT
+            </p>
+
+            <h2 className="mt-3 text-2xl font-black">
+              {reportTarget.reason}
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-zinc-500">
+              {reportTarget.details || "No additional details provided."}
+            </p>
+
+            <textarea
+              value={reportNote}
+              onChange={(event) => setReportNote(event.target.value)}
+              placeholder="Optional internal admin note..."
+              rows={4}
+              className="mt-5 w-full resize-none rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-600"
+            />
+
+            <div className="mt-5 flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setReportTarget(null);
+                  setReportNote("");
+                }}
+                className="rounded-xl px-4 py-2.5 text-sm text-zinc-500 hover:text-white"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleReportStatus(reportTarget, "denied")
+                }
+                className="forge-button rounded-xl border border-white/10 bg-white/[0.04] px-5 py-2.5 text-sm text-zinc-300"
+              >
+                Deny
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  handleReportStatus(reportTarget, "resolved")
+                }
+                className="forge-button rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-white"
+              >
+                Resolve
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {deleteProject && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-6 backdrop-blur-md">
@@ -975,19 +1302,15 @@ export default function AdminPage() {
             </h2>
 
             <p className="mt-3 text-sm leading-6 text-zinc-500">
-              This permanently removes the project. The
-              creator will receive a notification containing
-              the reason you provide.
+              This permanently removes the project and notifies its creator.
             </p>
 
             <textarea
               value={deleteReason}
-              onChange={(event) =>
-                setDeleteReason(event.target.value)
-              }
+              onChange={(event) => setDeleteReason(event.target.value)}
               placeholder="Why is this project being removed?"
               rows={5}
-              className="mt-5 w-full resize-none rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-red-400/30"
+              className="mt-5 w-full resize-none rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-600"
             />
 
             <div className="mt-5 flex justify-end gap-3">
@@ -1006,11 +1329,9 @@ export default function AdminPage() {
                 type="button"
                 disabled={deleting}
                 onClick={handleDeleteProject}
-                className="forge-button rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-400 disabled:opacity-50"
+                className="forge-button rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
-                {deleting
-                  ? "Deleting..."
-                  : "Delete project"}
+                {deleting ? "Deleting..." : "Delete project"}
               </button>
             </div>
           </div>
@@ -1026,15 +1347,8 @@ export default function AdminPage() {
 
             <h2 className="mt-3 text-2xl font-black">
               Ban{" "}
-              {banUser.displayName ||
-                banUser.username ||
-                "this user"}?
+              {banUser.displayName || banUser.username || "this user"}?
             </h2>
-
-            <p className="mt-3 text-sm text-zinc-500">
-              The user will be prevented from performing
-              Forge actions while the ban is active.
-            </p>
 
             <label className="mt-5 block text-xs uppercase tracking-wider text-zinc-600">
               Duration
@@ -1042,9 +1356,7 @@ export default function AdminPage() {
 
             <select
               value={banDuration}
-              onChange={(event) =>
-                setBanDuration(event.target.value)
-              }
+              onChange={(event) => setBanDuration(event.target.value)}
               className="mt-2 w-full rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm text-white outline-none"
             >
               {durations.map((duration) => (
@@ -1056,10 +1368,7 @@ export default function AdminPage() {
                   {duration.label}
                 </option>
               ))}
-              <option
-                value="permanent"
-                className="bg-[#0b0b0b]"
-              >
+              <option value="permanent" className="bg-[#0b0b0b]">
                 Permanent
               </option>
             </select>
@@ -1070,12 +1379,10 @@ export default function AdminPage() {
 
             <textarea
               value={banReason}
-              onChange={(event) =>
-                setBanReason(event.target.value)
-              }
+              onChange={(event) => setBanReason(event.target.value)}
               placeholder="Why is this user being banned?"
               rows={4}
-              className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-red-400/30"
+              className="mt-2 w-full resize-none rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-600"
             />
 
             <div className="mt-5 flex justify-end gap-3">
@@ -1091,9 +1398,52 @@ export default function AdminPage() {
                 type="button"
                 disabled={banning}
                 onClick={handleBan}
-                className="forge-button rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-red-400 disabled:opacity-50"
+                className="forge-button rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
               >
                 {banning ? "Banning..." : "Ban user"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 px-6 backdrop-blur-md">
+          <div className="forge-scale w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b0b0b] p-6 shadow-2xl">
+            <p className="text-xs font-medium uppercase tracking-widest text-red-400">
+              DELETE USER DATA
+            </p>
+
+            <h2 className="mt-3 text-2xl font-black">
+              Delete{" "}
+              {deleteUser.displayName ||
+                deleteUser.username ||
+                "this user"}
+              ?
+            </h2>
+
+            <p className="mt-3 text-sm leading-6 text-zinc-500">
+              This removes their Forge profile data, owned projects,
+              ban record, follows, notifications, and block list. It
+              does not delete the Firebase Authentication account.
+            </p>
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteUser(null)}
+                className="rounded-xl px-4 py-2.5 text-sm text-zinc-500 hover:text-white"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={deletingUser}
+                onClick={handleDeleteUser}
+                className="forge-button rounded-xl bg-red-500 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {deletingUser ? "Deleting..." : "Delete data"}
               </button>
             </div>
           </div>
