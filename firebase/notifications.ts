@@ -1,99 +1,70 @@
 import {
+  getDatabase,
   get,
   push,
   ref,
   remove,
   update,
 } from "firebase/database";
-
-import { database } from "./database";
-
-export type NotificationType =
-  | "follow"
-  | "like"
-  | "report"
-  | "moderation"
-  | "collaboration_request"
-  | "collaboration_accepted"
-  | "collaboration_declined";
+import database from "./config";
 
 export interface ForgeNotification {
   id: string;
-  type: NotificationType;
+  type:
+    | "collaboration_request"
+    | "collaboration_accepted"
+    | "collaboration_declined"
+    | "follow"
+    | "project"
+    | "moderation";
   title: string;
   message: string;
-  createdAt: number;
-  read: boolean;
   actorId?: string;
-  fromUid?: string;
-  targetId?: string;
   projectId?: string;
+  reportId?: string;
   requestId?: string;
+  targetId?: string;
+  read: boolean;
+  createdAt: number;
 }
 
 export async function createNotification(
   uid: string,
   notification: Omit<ForgeNotification, "id">
 ) {
-  if (!uid) {
-    throw new Error("Notification recipient is required.");
-  }
-
   const notificationRef = push(
-    ref(database, `notifications/${uid}`)
+    ref(getDatabase(database), `notifications/${uid}`)
   );
 
-  const id = notificationRef.key;
-
-  if (!id) {
-    throw new Error("Failed to create notification.");
-  }
-
-  const data: Omit<ForgeNotification, "id"> = {
+  await update(notificationRef, {
+    id: notificationRef.key,
     ...notification,
-    read: false,
-  };
+  });
 
-  await update(notificationRef, data);
-
-  return {
-    id,
-    ...data,
-  };
+  return notificationRef.key;
 }
 
 export async function getNotifications(
   uid: string
 ): Promise<ForgeNotification[]> {
   const snapshot = await get(
-    ref(database, `notifications/${uid}`)
+    ref(getDatabase(database), `notifications/${uid}`)
   );
 
   if (!snapshot.exists()) {
     return [];
   }
 
-  return Object.entries(snapshot.val())
-    .filter(
-      ([, notification]) =>
-        notification &&
-        typeof notification === "object"
-    )
-    .map(([id, notification]) => ({
-      id,
-      ...(notification as Omit<ForgeNotification, "id">),
-    }))
-    .sort((a, b) => b.createdAt - a.createdAt);
-}
+  const notifications: ForgeNotification[] = [];
 
-export async function getUnreadNotificationCount(
-  uid: string
-) {
-  const notifications = await getNotifications(uid);
+  snapshot.forEach((child) => {
+    notifications.push({
+      id: child.key!,
+      ...child.val(),
+    });
+  });
 
-  return notifications.filter(
-    (notification) => !notification.read
-  ).length;
+  return notifications.sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function markNotificationRead(
@@ -101,37 +72,32 @@ export async function markNotificationRead(
   notificationId: string
 ) {
   await update(
-    ref(
-      database,
-      `notifications/${uid}/${notificationId}`
-    ),
+    ref(getDatabase(database), `notifications/${uid}/${notificationId}`),
     {
       read: true,
     }
   );
 }
 
-export async function markAllNotificationsRead(
-  uid: string
-) {
-  const notifications = await getNotifications(uid);
+export async function markAllNotificationsRead(uid: string) {
+  const snapshot = await get(
+    ref(getDatabase(database), `notifications/${uid}`)
+  );
 
-  if (notifications.length === 0) {
+  if (!snapshot.exists()) {
     return;
   }
 
   const updates: Record<string, boolean> = {};
 
-  for (const notification of notifications) {
-    if (!notification.read) {
-      updates[
-        `notifications/${uid}/${notification.id}/read`
-      ] = true;
+  snapshot.forEach((child) => {
+    if (!child.val().read) {
+      updates[`${child.key}/read`] = true;
     }
-  }
+  });
 
   if (Object.keys(updates).length > 0) {
-    await update(ref(database), updates);
+    await update(ref(getDatabase(database), `notifications/${uid}`), updates);
   }
 }
 
@@ -140,9 +106,6 @@ export async function deleteNotification(
   notificationId: string
 ) {
   await remove(
-    ref(
-      database,
-      `notifications/${uid}/${notificationId}`
-    )
+    ref(getDatabase(database), `notifications/${uid}/${notificationId}`)
   );
 }
