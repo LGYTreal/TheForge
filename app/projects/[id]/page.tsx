@@ -4,8 +4,9 @@ import ProjectFeatures from "@/components/ProjectFeatures";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { getDatabase, onValue, ref, remove } from "firebase/database";
+import { getDatabase, onValue, ref, remove, set } from "firebase/database";
 import { onAuthStateChanged } from "firebase/auth";
+import { getUserProfile, ForgeUser } from "@/firebase/users";
 
 import app from "@/firebase/config";
 import { auth } from "@/firebase/auth";
@@ -51,6 +52,9 @@ export default function ProjectPage() {
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
+  const [creator, setCreator] = useState<ForgeUser | null>(null);
+  const [creatorBlocked, setCreatorBlocked] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -96,6 +100,71 @@ export default function ProjectPage() {
 
     return () => unsubscribe();
   }, [projectId]);
+
+  useEffect(() => {
+    if (!project?.ownerId) {
+      setCreator(null);
+      return;
+    }
+
+    let active = true;
+
+    getUserProfile(project.ownerId).then((profile) => {
+      if (active) {
+        setCreator(profile);
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [project?.ownerId]);
+
+  useEffect(() => {
+    if (!currentUserId || !project?.ownerId || currentUserId === project.ownerId) {
+      setCreatorBlocked(false);
+      return;
+    }
+
+    const blockedRef = ref(
+      getDatabase(app),
+      `blockedUsers/${currentUserId}/${project.ownerId}`
+    );
+
+    return onValue(blockedRef, (snapshot) => {
+      setCreatorBlocked(snapshot.exists());
+    });
+  }, [currentUserId, project?.ownerId]);
+
+  async function handleCreatorBlock() {
+    if (
+      !currentUserId ||
+      !project?.ownerId ||
+      currentUserId === project.ownerId ||
+      blockLoading
+    ) {
+      return;
+    }
+
+    setBlockLoading(true);
+
+    try {
+      const blockedRef = ref(
+        getDatabase(app),
+        `blockedUsers/${currentUserId}/${project.ownerId}`
+      );
+
+      if (creatorBlocked) {
+        await remove(blockedRef);
+        setCreatorBlocked(false);
+      } else {
+        await set(blockedRef, true);
+        setCreatorBlocked(true);
+      }
+    } finally {
+      setBlockLoading(false);
+    }
+  }
 
   function formatDate(timestamp?: number) {
     if (!timestamp) {
@@ -292,6 +361,73 @@ export default function ProjectPage() {
             <p className="mt-6 max-w-3xl whitespace-pre-wrap text-base leading-8 text-zinc-400 sm:text-lg">
               {project.description}
             </p>
+
+            {creator && (
+              <div className="mt-8 flex flex-col gap-5 rounded-3xl border border-white/10 bg-black/20 p-5 sm:flex-row sm:items-center sm:justify-between">
+                <Link
+                  href={`/profile?uid=${project.ownerId}`}
+                  className="group flex min-w-0 items-center gap-4"
+                >
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-zinc-800 text-xl font-bold">
+                    {creator.avatar ? (
+                      <img
+                        src={creator.avatar}
+                        alt={creator.displayName || creator.username || "Creator"}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      (
+                        creator.displayName ||
+                        creator.username ||
+                        "?"
+                      )
+                        .charAt(0)
+                        .toUpperCase()
+                    )}
+                  </div>
+
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium uppercase tracking-wider text-zinc-600">
+                      Created by
+                    </p>
+                    <h2 className="mt-1 truncate text-lg font-bold text-white transition group-hover:text-violet-300">
+                      {creator.displayName || creator.username || "Forge User"}
+                    </h2>
+                    <p className="mt-0.5 truncate text-sm text-zinc-500">
+                      @{creator.username || project.ownerId.slice(0, 6)}
+                    </p>
+                  </div>
+                </Link>
+
+                <div className="flex shrink-0 flex-wrap gap-3">
+                  <Link
+                    href={`/profile?uid=${project.ownerId}`}
+                    className="forge-button rounded-xl border border-white/10 bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+                  >
+                    View profile
+                  </Link>
+
+                  {!isOwner && currentUserId && (
+                    <button
+                      type="button"
+                      onClick={handleCreatorBlock}
+                      disabled={blockLoading}
+                      className={`forge-button rounded-xl border px-5 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                        creatorBlocked
+                          ? "border-red-500/20 bg-red-500/[0.08] text-red-300 hover:bg-red-500/[0.14]"
+                          : "border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08] hover:text-white"
+                      }`}
+                    >
+                      {blockLoading
+                        ? "..."
+                        : creatorBlocked
+                          ? "Unblock creator"
+                          : "Block creator"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {project.tags && project.tags.length > 0 && (
               <div className="mt-8 flex flex-wrap gap-2">

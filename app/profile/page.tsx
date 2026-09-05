@@ -6,6 +6,7 @@ import {
 } from "firebase/auth";
 
 import { useEffect, useState } from "react";
+import { getDatabase, onValue, ref, remove, set } from "firebase/database";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -67,6 +68,10 @@ export default function ProfilePage() {
 
   const [followLoading, setFollowLoading] =
     useState(false);
+
+  const [blocked, setBlocked] = useState(false);
+
+  const [blockLoading, setBlockLoading] = useState(false);
 
   const [loading, setLoading] =
     useState(true);
@@ -202,6 +207,52 @@ export default function ProfilePage() {
 
     return () => unsubscribe();
   }, [requestedUid]);
+
+  useEffect(() => {
+    if (!authUser || !profileUid || authUser.uid === profileUid) {
+      setBlocked(false);
+      return;
+    }
+
+    const blockedRef = ref(
+      getDatabase(),
+      `blockedUsers/${authUser.uid}/${profileUid}`
+    );
+
+    return onValue(blockedRef, (snapshot) => {
+      setBlocked(snapshot.exists());
+    });
+  }, [authUser, profileUid]);
+
+  async function handleBlock() {
+    if (
+      !authUser ||
+      !profileUid ||
+      authUser.uid === profileUid ||
+      blockLoading
+    ) {
+      return;
+    }
+
+    setBlockLoading(true);
+
+    try {
+      const blockedRef = ref(
+        getDatabase(),
+        `blockedUsers/${authUser.uid}/${profileUid}`
+      );
+
+      if (blocked) {
+        await remove(blockedRef);
+        setBlocked(false);
+      } else {
+        await set(blockedRef, true);
+        setBlocked(true);
+      }
+    } finally {
+      setBlockLoading(false);
+    }
+  }
 
   async function handleFollow() {
     if (
@@ -385,22 +436,37 @@ export default function ProfilePage() {
                   Edit profile
                 </Link>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleFollow}
-                  disabled={followLoading}
-                  className={`forge-button rounded-xl px-6 py-3 text-sm font-semibold transition ${
-                    followingUser
-                      ? "border border-white/10 bg-white/[0.04] text-zinc-300 hover:border-red-400/20 hover:bg-red-400/5 hover:text-red-300"
-                      : "bg-white text-black hover:bg-zinc-200"
-                  } disabled:cursor-not-allowed disabled:opacity-50`}
-                >
-                  {followLoading
-                    ? "..."
-                    : followingUser
-                      ? "Following"
-                      : "Follow"}
-                </button>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleFollow}
+                    disabled={followLoading || blockLoading}
+                    className={`forge-button rounded-xl px-6 py-3 text-sm font-semibold transition ${
+                      followingUser
+                        ? "border border-white/10 bg-white/[0.04] text-zinc-300 hover:border-red-400/20 hover:bg-red-400/5 hover:text-red-300"
+                        : "bg-white text-black hover:bg-zinc-200"
+                    } disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    {followLoading
+                      ? "..."
+                      : followingUser
+                        ? "Following"
+                        : "Follow"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleBlock}
+                    disabled={blockLoading || followLoading}
+                    className={`forge-button rounded-xl border px-6 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                      blocked
+                        ? "border-red-500/20 bg-red-500/[0.08] text-red-300 hover:bg-red-500/[0.14]"
+                        : "border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08] hover:text-white"
+                    }`}
+                  >
+                    {blockLoading ? "..." : blocked ? "Unblock" : "Block"}
+                  </button>
+                </div>
               )}
             </div>
 
