@@ -240,9 +240,9 @@ export default function AdminPage() {
       adminUid: user.uid,
       targetType,
       targetId,
-      targetName,
-      details,
       createdAt: Date.now(),
+      ...(targetName !== undefined ? { targetName } : {}),
+      ...(details !== undefined ? { details } : {}),
     };
 
     await createModerationLog(log);

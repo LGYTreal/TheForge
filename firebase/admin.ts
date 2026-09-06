@@ -273,10 +273,24 @@ export async function createModerationLog(
 ) {
   const logRef = push(ref(database, "moderationLogs"));
 
-  await set(logRef, {
+  const logData: Record<string, unknown> = {
     id: logRef.key,
-    ...log,
-  });
+    action: log.action,
+    adminUid: log.adminUid,
+    targetType: log.targetType,
+    targetId: log.targetId,
+    createdAt: log.createdAt,
+  };
+
+  if (log.targetName !== undefined) {
+    logData.targetName = log.targetName;
+  }
+
+  if (log.details !== undefined) {
+    logData.details = log.details;
+  }
+
+  await set(logRef, logData);
 
   return logRef.key;
 }
