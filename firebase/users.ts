@@ -11,8 +11,6 @@ export interface ForgeUser {
   banner: string;
   skills: string[];
   createdAt: number;
-  canPublish?: boolean;
-  canFollow?: boolean;
 }
 
 export interface ForgeUserWithId extends ForgeUser {
