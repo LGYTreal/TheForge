@@ -36,10 +36,36 @@ export async function createNotification(
     ref(getDatabase(database), `notifications/${uid}`)
   );
 
-  await update(notificationRef, {
+  const notificationData: Record<string, unknown> = {
     id: notificationRef.key,
-    ...notification,
-  });
+    type: notification.type,
+    title: notification.title,
+    message: notification.message,
+    read: notification.read,
+    createdAt: notification.createdAt,
+  };
+
+  if (notification.actorId !== undefined) {
+    notificationData.actorId = notification.actorId;
+  }
+
+  if (notification.projectId !== undefined) {
+    notificationData.projectId = notification.projectId;
+  }
+
+  if (notification.reportId !== undefined) {
+    notificationData.reportId = notification.reportId;
+  }
+
+  if (notification.requestId !== undefined) {
+    notificationData.requestId = notification.requestId;
+  }
+
+  if (notification.targetId !== undefined) {
+    notificationData.targetId = notification.targetId;
+  }
+
+  await update(notificationRef, notificationData);
 
   return notificationRef.key;
 }
