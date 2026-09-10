@@ -28,10 +28,24 @@ export async function followUser(
     return;
   }
 
+  const targetProfile = await getUserProfile(targetUid);
+
+  if (!targetProfile) {
+    throw new Error("This user could not be found.");
+  }
+
+  if (targetProfile.canFollow === false) {
+    throw new Error("This user is not accepting followers right now.");
+  }
+
   const alreadyFollowing = await isFollowing(
     followerUid,
     targetUid
   );
+
+  if (alreadyFollowing) {
+    return;
+  }
 
   await Promise.all([
     set(
@@ -50,31 +64,29 @@ export async function followUser(
     ),
   ]);
 
-  if (!alreadyFollowing) {
-    let username = "Someone";
+  let username = "Someone";
 
-    try {
-      const profile = await getUserProfile(followerUid);
+  try {
+    const profile = await getUserProfile(followerUid);
 
-      if (profile?.username) {
-        username = `@${profile.username}`;
-      } else if (profile?.displayName) {
-        username = profile.displayName;
-      }
-    } catch {}
+    if (profile?.username) {
+      username = `@${profile.username}`;
+    } else if (profile?.displayName) {
+      username = profile.displayName;
+    }
+  } catch {}
 
-    try {
-      await createNotification(targetUid, {
-        type: "follow",
-        title: "New follower",
-        message: `${username} started following you.`,
-        createdAt: Date.now(),
-        read: false,
-        fromUid: followerUid,
-        targetId: followerUid,
-      });
-    } catch {}
-  }
+  try {
+    await createNotification(targetUid, {
+      type: "follow",
+      title: "New follower",
+      message: `${username} started following you.`,
+      createdAt: Date.now(),
+      read: false,
+      actorId: followerUid,
+      targetId: followerUid,
+    });
+  } catch {}
 }
 
 export async function unfollowUser(
