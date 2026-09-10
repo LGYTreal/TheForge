@@ -22,6 +22,7 @@ type Project = {
   memberCount?: number;
   createdAt?: number;
   thumbnailUrl?: string;
+  hidden?: boolean;
 };
 
 const categories = [
@@ -64,12 +65,12 @@ export default function ProjectsPage() {
           return;
         }
 
-        const loadedProjects: Project[] = Object.entries(data).map(
-          ([id, value]) => ({
+        const loadedProjects: Project[] = Object.entries(data)
+          .map(([id, value]) => ({
             id,
             ...(value as Omit<Project, "id">),
-          })
-        );
+          }))
+          .filter((project) => !project.hidden);
 
         loadedProjects.sort(
           (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
@@ -106,6 +107,10 @@ export default function ProjectsPage() {
     const query = search.trim().toLowerCase();
 
     return projects.filter((project) => {
+      if (project.hidden) {
+        return false;
+      }
+
       if (authUser && blockedUsers[project.ownerId]) {
         return false;
       }
